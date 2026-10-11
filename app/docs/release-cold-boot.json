@@ -1,0 +1,11 @@
+{
+  "testDate": "2026-10-11",
+  "newBoot": true,
+  "uptimeSeconds": 438.07,
+  "serviceRunning": true,
+  "authenticatedRootAgentConnected": true,
+  "rootAgentUid": 0,
+  "mode": "tv-integration",
+  "userConfirmedNoManualLaunch": true,
+  "installedVersion": "previous installed integration; latest release-source changes not deployed"
+}

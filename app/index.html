@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Vetro</title>
+<script src="$WEBAPIS/webapis/webapis.js"></script></head>
+<body style="font-family:monospace;background:#0d1117;color:#e6edf3">
+<h2>Vetro</h2>
+<p>Dashboard at <code>http://&lt;TV&gt;:8099/</code> · Tizen/Samsung public API probe</p>
+<pre id="out">Starting…</pre>
+<script>
+var BASE = 'http://127.0.0.1:8099';
+var report = {probe: {}, apps: [], packages: [], settings: {}};
+var out = document.getElementById('out');
+function log(line) { out.textContent += '\n' + line; }
+function attempt(name, fn) {
+  return new Promise(function (resolve) {
+    try {
+      Promise.resolve(fn()).then(function (v) { report.probe[name] = {ok: true, value: v}; log('ok   ' + name); resolve(); },
+        function (e) { report.probe[name] = {ok: false, error: String(e && e.message || e)}; log('fail ' + name); resolve(); });
+    } catch (e) { report.probe[name] = {ok: false, error: String(e && e.message || e)}; log('fail ' + name); resolve(); }
+  });
+}
+function cb(call) { return new Promise(function (ok, ko) { call(ok, ko); }); }
+function sendReport() {
+  return new Promise(function (resolve, reject) {
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', BASE + '/probe', true);
+    xhr.timeout = 10000;
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.onload = function () {
+      var result;
+      try { result = JSON.parse(xhr.responseText); } catch (e) { return reject(new Error('Response is not JSON')); }
+      if (xhr.status !== 200 || result.ok !== true) return reject(new Error('Report rejected: HTTP ' + xhr.status));
+      resolve({status: xhr.status, persisted: result.persisted});
+    };
+    xhr.onerror = function () { reject(new Error('Report send failed')); };
+    xhr.ontimeout = function () { reject(new Error('Report send timeout')); };
+    xhr.send(JSON.stringify(report));
+  });
+}
+function tryConnect(port) {
+  return new Promise(function (resolve, reject) {
+    var ws = new WebSocket('ws://127.0.0.1:' + port + '/api/v2/channels/samsung.remote.control?name=' + btoa('Vetro'));
+    var t = setTimeout(function () { try { ws.close(); } catch (e) {} reject(new Error('timeout')); }, 4000);
+    ws.onopen = function () { clearTimeout(t); ws.close(); resolve('open'); };
+    ws.onerror = function () { clearTimeout(t); reject(new Error('refused')); };
+  });
+}
+var jobs = [
+  ['tizenObject', function () { return typeof tizen !== 'undefined'; }],
+  ['webapisObject', function () { return typeof webapis !== 'undefined'; }],
+  ['supportedKeys', function () { return tizen.tvinputdevice.getSupportedKeys().map(function (k) { return k.name; }); }],
+  ['apps', function () { return cb(function (ok, ko) { tizen.application.getAppsInfo(ok, ko); }).then(function (a) {
+      report.apps = a.map(function (x) { return {id: x.id, name: x.name, packageId: x.packageId, show: x.show}; });
+      return a.length; }); }],
+  ['packages', function () { return cb(function (ok, ko) { tizen.package.getPackagesInfo(ok, ko); }).then(function (p) {
+      report.packages = p.map(function (x) { return {id: x.id, version: x.version, totalSize: x.totalSize, author: x.author}; });
+      return p.length; }); }],
+  ['productinfo', function () {
+      ['getModel', 'getRealModel', 'getFirmware', 'getModelCode', 'getLocalSet', 'getSmartTVServerType'].forEach(function (m) {
+        var id = {getModel: 'model', getRealModel: 'realModel', getFirmware: 'firmware', getModelCode: 'modelCode',
+          getLocalSet: 'localSet', getSmartTVServerType: 'smartHubServer'}[m];
+        try { report.settings[id] = webapis.productinfo[m](); } catch (e) {}
+      });
+      return Object.keys(report.settings).length; }],
+  ['systeminfoBattery', function () { return cb(function (ok, ko) { tizen.systeminfo.getPropertyValue('BUILD', ok, ko); }); }],
+  ['remoteApi8001', function () { return tryConnect(8001); }],
+  ['serviceReach', function () { return fetch(BASE + '/status').then(function (r) { return r.status; }); }]
+];
+jobs.reduce(function (p, j) { return p.then(function () { return attempt(j[0], j[1]); }); }, Promise.resolve())
+  .then(function () {
+    return sendReport();
+  }).then(function (r) { log('\nReport sent to service: ' + r.status + (r.persisted ? ' · saved' : ' · memory only')); },
+    function (e) { log('\nService unreachable: ' + e); });
+</script>
+</body>
+</html>

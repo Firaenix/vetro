@@ -1,0 +1,38 @@
+'use strict';
+const assert=require('assert').strict,vm=require('vm');
+const html=require('../service/dashboard.js')(),nodes={},calls=[];
+const el=id=>nodes[id]||(nodes[id]={value:'',checked:false,disabled:false,hidden:true,textContent:'',innerHTML:'',focus(){}});
+let response={},fault={},pending=null;
+const sandbox={document:{getElementById:el,querySelectorAll:()=>[],addEventListener(){}},setInterval(){},setTimeout(){},clearTimeout(){},console,confirm:()=>true,
+ fetch:async(url,opts)=>{let p=opts&&opts.body?JSON.parse(opts.body):null;calls.push({url,p});let key=(p?'POST ':'GET ')+url;
+ if(pending&&key===pending.key)await pending.promise;if(fault[key])throw Error(fault[key]);
+ let d=response[key];if(typeof d==='function')d=d(p);
+ if(d===undefined)d=url.startsWith('/apps')?{apps:[],summary:{total:0}}:url==='/remap'?{rules:[]}:url==='/input'?{devices:[],status:{policy:{mode:'off'},events:[]}}:url.startsWith('/monitor')?{ts:Date.now(),memory:{totalBytes:1,availableBytes:0},cpu:{percent:0,cores:[]},processes:[],network:[]}:{};
+ return {ok:true,json:async()=>d};}
+};
+vm.runInNewContext(html.match(/<script>([\s\S]*?)<\/script>/)[1],sandbox);
+const tick=()=>new Promise(r=>setImmediate(r)),latest=()=>sandbox.operationEntries[0],event=b=>({target:{closest:selector=>selector==='[data-setting]'?b:null}});
+(async()=>{
+ await tick();
+ el('dnsEnabled').checked=true;el('dnsDomains').value='ADS.example.com\nads.example.com';response['POST /dns']={enabled:true,applied:true,domains:['ads.example.com'],resolvers:['192.0.2.5'],namespaceWarnings:[]};
+ let release;pending={key:'POST /dns',promise:new Promise(r=>release=r)};
+ const dns=el('saveDns').onclick();assert.equal(el('saveDns').disabled,true);await el('saveDns').onclick();await tick();assert.equal(calls.filter(c=>c.url==='/dns'&&c.p).length,1);release();pending=null;await dns;
+ assert.equal(latest().resultLabel,'State read');assert.match(latest().message,/DNS servers unchanged/);assert.match(latest().message,/not been verified/);assert.equal(el('saveDns').disabled,false);
+ response['POST /dns'].namespaceWarnings=['skipped_namespace:7'];await el('saveDns').onclick();assert.equal(latest().state,'warning');
+ response['POST /dns'].applied=false;await el('saveDns').onclick();assert.equal(latest().state,'warning');
+ el('mqttEnabled').checked=true;el('mqttPort').value='1883';el('mqttPassword').value='SECRET_DO_NOT_LOG';response['POST /mqtt']={config:{enabled:true},status:{state:'connecting'}};response['GET /mqtt']={config:{enabled:true},status:{state:'connecting'}};
+ await el('saveMqtt').onclick();assert.equal(latest().resultLabel,'Saved');assert.match(latest().message,/not confirmed/);assert.ok(!el('operationItems').innerHTML.includes('SECRET_DO_NOT_LOG'));assert.equal(el('mqttPassword').value,'');
+ fault['GET /mqtt']='Diagnostica offline';await el('saveMqtt').onclick();assert.equal(latest().state,'warning');assert.match(latest().message,/Configuration saved/);assert.match(latest().message,/View refresh failed/);delete fault['GET /mqtt'];
+ const rule={id:'rule_one',enabled:true,trigger:{type:'physical',value:'68'},actions:[{type:'launch',appId:'example.app'}]};response['POST /remap']=p=>({rules:p.rules,persisted:false});await sandbox.saveRuleSet([rule],'Aggiunta',el('saveRule'));assert.equal(latest().state,'warning');assert.match(latest().message,/in memory/);assert.match(latest().message,/lost on restart/);
+ response['POST /remap']=p=>({rules:p.rules,persisted:true});await sandbox.saveRuleSet([],'Eliminazione',el('saveRule'));assert.equal(latest().state,'success');assert.match(latest().message,/interception has stopped/);assert.match(latest().message,/Test the actions separately/);
+ response['POST /remap']={rules:[],persisted:true};await sandbox.saveRuleSet([rule],'Aggiunta',el('saveRule'));assert.equal(latest().state,'warning');assert.match(latest().message,/do not match/);
+ sandbox.tvSettingsData={items:[{id:'contrast',label:'Contrast',value:45,min:0,max:50,writable:true,group:'picture'}],network:{},device:{}};el('setting-contrast').value='40';const b={dataset:{setting:'contrast'},disabled:false,textContent:'Save'};
+ response['POST /tv-settings']={verified:true,id:'contrast',previous:45,value:40};response['GET /tv-settings']={items:[{id:'contrast',label:'Contrast',value:40,group:'picture'}],network:{},device:{}};
+ await el('settingGroups').onclick(event(b));assert.equal(latest().resultLabel,'Value read back');assert.match(latest().message,/45 → 40/);assert.equal(sandbox.settingBusy,false);
+ response['POST /tv-settings'].verified=false;await el('settingGroups').onclick(event(b));assert.equal(latest().state,'warning');
+ response['POST /tv-settings'].verified=true;fault['GET /tv-settings']='Lettura offline';await el('settingGroups').onclick(event(b));assert.match(latest().message,/45 → 40/);assert.match(latest().message,/View refresh failed/);delete fault['GET /tv-settings'];
+ sandbox.hbbtvData={value:20};sandbox.settingsSection='privacy';const h={dataset:{hbbtvToggle:'off'},disabled:false,textContent:'Turn off HbbTV'};response['POST /hbbtv']={off:true,value:0,changed:true};response['GET /hbbtv']={off:true,value:0};response['GET /privacy']={hbbtv:{},adId:{},acr:{},agreements:[]};await el('settingGroups').onclick({target:{closest:s=>s==='[data-hbbtv-toggle]'?h:null}});assert.equal(latest().resultLabel,'Value read back');assert.match(latest().message,/20 → 0/);assert.match(latest().message,/confirm the effect/);
+ response['POST /input']={status:{policy:{mode:'filter',connected:false}}};await sandbox.policy('filter');assert.equal(latest().state,'warning');assert.match(latest().message,/not confirmed/);
+ response['POST /input']={status:{policy:{mode:'filter',connected:true}}};await sandbox.policy('filter');assert.equal(latest().state,'success');assert.match(latest().message,/Test a configured key/);
+ console.log('PASS control feedback: DNS scope, MQTT saved vs connected, secret omission, rule durability, settings readback, HbbTV visual limits, input connectivity');
+})().catch(e=>{console.error(e);process.exitCode=1});

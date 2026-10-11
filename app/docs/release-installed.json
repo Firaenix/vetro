@@ -1,0 +1,20 @@
+{
+  "version": "0.2.0",
+  "sourceRevision": "2eb762c19b8530b0872c98623445e17031ddadd1",
+  "signedInstallationVerified": true,
+  "dashboardExactMatch": true,
+  "configurationPreserved": {
+    "appFlags": true,
+    "remapperRules": true,
+    "dnsResolvers": true,
+    "dnsDomains": true
+  },
+  "diagnostics": {
+    "sections": 14,
+    "available": 14
+  },
+  "backgroundAfterUiClose": true,
+  "rootAgentConnected": true,
+  "rootAgentUid": 0,
+  "coldBootOfThisVersion": "not tested"
+}

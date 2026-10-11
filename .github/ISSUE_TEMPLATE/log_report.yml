@@ -1,0 +1,50 @@
+name: TV diagnostic report
+description: Share a redacted Vetro report for compatibility analysis.
+title: "[Log report] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Download the JSON file from Vetro → Diagnostics → Download report.
+        Reports in a public issue are public. Review the file before attaching it.
+        Do not upload raw logs, passwords, addresses, serial numbers or viewing history.
+        Automated feedback is preliminary; it does not prove persistence or safe settings.
+  - type: input
+    id: model
+    attributes:
+      label: TV model
+      placeholder: Model code only, no serial number
+    validations:
+      required: true
+  - type: input
+    id: firmware
+    attributes:
+      label: Firmware version
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Vetro version or commit
+    validations:
+      required: true
+  - type: upload
+    id: report
+    attributes:
+      label: Vetro diagnostic report
+      description: Attach one vetro-diagnostics.json file, maximum 2 MiB.
+    validations:
+      required: true
+      accept: ".json"
+  - type: textarea
+    id: observations
+    attributes:
+      label: What happened?
+      description: Describe the expected behavior and the steps you tried. Do not include account names or private addresses.
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Before submitting
+      options:
+        - label: I reviewed the report and understand that this issue and attachment will be public.
+          required: true

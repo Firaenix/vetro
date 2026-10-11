@@ -1,0 +1,21 @@
+* text=auto
+.github/** text eol=lf
+*.py text eol=lf
+*.sh text eol=lf
+*.cjs text eol=lf
+*.js text eol=lf
+*.png binary
+*.dll binary
+app/diagnostics/** export-ignore
+rooting/on-boot-probe/** export-ignore
+rooting/on-boot-probe/package.json -export-ignore
+rooting/on-boot-probe/package-lock.json -export-ignore
+rooting/tools/tizen/** export-ignore
+rooting/tools/payloads31/** export-ignore
+rooting/tools/*.wgt export-ignore
+rooting/tools/sign-external.cjs export-ignore
+rooting/tools/upload-via-exec.py export-ignore
+.claude/** export-ignore
+
+app/experiments/** export-ignore
+app/tests/animations.test.cjs export-ignore

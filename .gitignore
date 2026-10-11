@@ -1,0 +1,43 @@
+# Build artifact & dependencies
+node_modules/
+dist/
+mint.log
+
+# Private keys / signing material (never commit)
+*.p12
+*.pfx
+*privatekey*.pem
+certs/samsung/
+
+# Local log/marker files
+*.log
+
+# OS
+.DS_Store
+# Private reports, retired experiments and local device tools
+/app/diagnostics/
+/rooting/on-boot-probe/*
+!/rooting/on-boot-probe/package.json
+!/rooting/on-boot-probe/package-lock.json
+/rooting/tools/tizen/
+/rooting/tools/payloads31/
+/rooting/tools/*.wgt
+/rooting/tools/sign-external.cjs
+/rooting/tools/upload-via-exec.py
+.claude/
+.codex/
+.agents/
+.env
+.env.*
+__pycache__/
+*.pyc
+*.wgt
+*.zip
+*.tar.gz
+*.cer
+*.crt
+*.key
+
+# Rejected local experiments and their historical test
+/app/experiments/
+/app/tests/animations.test.cjs

@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<widget xmlns="http://www.w3.org/ns/widgets" xmlns:tizen="http://tizen.org/ns/widgets" id="http://vetro.local" version="0.2.0" viewmodes="maximized">
+    <tizen:application id="vetrotvapp.app" package="vetrotvapp" required_version="3.0"/>
+    <author>vetro</author>
+    <content src="index.html"/>
+    <access origin="http://127.0.0.1:8099" subdomains="false"/>
+    <access origin="ws://127.0.0.1:8001" subdomains="false"/>
+    <access origin="wss://127.0.0.1:8002" subdomains="false"/>
+    <feature name="http://tizen.org/feature/screen.size.all"/>
+    <feature name="http://tizen.org/feature/web.service"/>
+    <icon src="icon.png"/>
+    <name>Vetro</name>
+
+    <tizen:privilege name="http://tizen.org/privilege/internet"/>
+    <tizen:privilege name="http://tizen.org/privilege/filesystem.read"/>
+    <tizen:privilege name="http://tizen.org/privilege/unlimitedstorage"/>
+    <tizen:privilege name="http://tizen.org/privilege/application.info"/>
+    <tizen:privilege name="http://tizen.org/privilege/package.info"/>
+    <tizen:privilege name="http://tizen.org/privilege/tv.inputdevice"/>
+    <tizen:privilege name="http://developer.samsung.com/privilege/productinfo"/>
+
+    <tizen:profile name="tv-samsung"/>
+
+    <tizen:service id="vetrotvapp.svc" auto-restart="true" on-boot="true">
+        <tizen:content src="service/main.js"/>
+        <tizen:name>VetroService</tizen:name>
+        <tizen:description>Telemetry dashboard with an optional TV platform adapter.</tizen:description>
+    </tizen:service>
+
+    <tizen:setting screen-orientation="landscape" context-menu="disable" background-support="disable" encryption="disable" install-location="auto" hwkey-event="enable"/>
+</widget>

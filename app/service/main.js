@@ -1,0 +1,556 @@
+'use strict';
+// Vetro application: telemetry, dashboard and feature endpoints.
+// Platform operations use the adapter documented in PLATFORM.md.
+var fs = require('fs');
+var http = require('http');
+var os = require('os');
+var MqttBridge = require('./mqtt-bridge.js').MqttBridge;
+var debloat = require('./debloat.js');
+var control = require('./control.js');
+var packageInfo = require('./package-info.js');
+var platform = require('./platform.js');
+var buildInfo = require('./build-info.js');
+var apps = require('./apps.js');
+var probe = require('./probe.js');
+var remap = require('./remap.js');
+var settings = require('./settings.js');
+var TVSettings = require('./tv-settings.js').Store;
+var AppRegistry = require('./app-registry.js');
+var PhysicalInput = require('./physical-input.js').Bridge;
+var renderDashboard = require('./dashboard.js');
+var SystemMonitor = require('./system-monitor.js').Monitor;
+var monitor = new SystemMonitor(agentExecute);
+var ComponentActions = require('./component-actions.js');
+var dnsFilter = new (require('./local-dns.js').Filter)(agentExecute);
+var homeOrder = new (require('./home-order.js').Order)(agentExecute);
+var hbbtv = new (require('./hbbtv.js').Control)(agentExecute);
+var privacy = new (require('./privacy.js').Privacy)(agentExecute);
+var menuSettings = new (require('./menu-settings.js').Catalog)(agentExecute);
+var PORT = Number(process.env.VETRO_PORT) || 8099;
+
+// --- telemetry reader (service side, uid 5001) ---------------------------
+// Reads /proc and /sys directly via fs. No platform command is needed. Every read
+// is best-effort: a missing or unreadable path yields null and degrades
+// gracefully instead of failing the whole endpoint.
+function tryRead(p) { try { return fs.readFileSync(p, 'utf8').trim(); } catch (e) { return null; } }
+function tryReadRaw(p) { try { return fs.readFileSync(p, 'utf8'); } catch (e) { return null; } }
+
+function readTelemetry() {
+    var out = {
+        ts: Math.floor(Date.now() / 1000),
+        boot_id: tryRead('/proc/sys/kernel/random/boot_id'),
+        hostname: tryRead('/etc/hostname'),
+        loadavg: tryRead('/proc/loadavg'),
+        cpu_online: tryRead('/sys/devices/system/cpu/online'),
+        cpu_gov: tryRead('/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor'),
+        zram_mm_stat: tryRead('/sys/block/zram0/mm_stat')
+    };
+
+    var up = tryRead('/proc/uptime');
+    if (up) out.uptime_s = parseFloat(up.split(/\s+/)[0]);
+    else out.uptime_s = null;
+
+    var cpuinfo = tryReadRaw('/proc/cpuinfo');
+    if (cpuinfo) out.cpu_cores = (cpuinfo.match(/^processor/mg) || []).length;
+    else out.cpu_cores = null;
+
+    var freq = tryRead('/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq');
+    if (freq) out.cpu_freq_khz = parseInt(freq, 10);
+    else out.cpu_freq_khz = null;
+
+    var meminfo = tryReadRaw('/proc/meminfo');
+    if (meminfo) out.meminfo = meminfo.split('\n').join(';');
+    else out.meminfo = null;
+
+    var stat = tryReadRaw('/proc/stat');
+    if (stat) {
+        out.cpu_stat = (stat.split('\n').filter(function (l) { return /^cpu /.test(l); })[0] || '').trim();
+        out.cpu_percpu = stat.split('\n').filter(function (l) { return /^cpu[0-9]/.test(l); }).join(';');
+    } else {
+        out.cpu_stat = null;
+        out.cpu_percpu = null;
+    }
+
+    var temp = tryRead('/sys/class/thermal/thermal_zone0/temp') || tryRead('/sys/devices/virtual/thermal/thermal_zone0/temp');
+    if (temp) { var t = parseInt(temp, 10); out.soctemp_c = (t > 1000) ? (t / 1000) : t; }
+    else out.soctemp_c = null;
+
+    return out;
+}
+
+// --- HTTP routing ---------------------------------------------------------
+function serveJson(res, obj, code) {
+    if (res.destroyed || res.writableEnded) return;
+    res.writeHead(code || 200, { 'content-type': 'application/json; charset=utf-8',
+        'connection': code === 413 || code === 408 ? 'close' : 'keep-alive' });
+    res.end(JSON.stringify(obj, null, 2) + '\n');
+}
+
+function serveHtml(res, html) {
+    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+    res.end(html);
+}
+
+function dashboardHtml() { return renderDashboard(); }
+
+var diagnosticPending = null;
+function downloadDiagnostics(res) {
+    if (!diagnosticPending) diagnosticPending = require('./diagnostic-report.js').collect({
+        platform: function () { return platform.status(); },
+        device: function () { return state.settings || {}; },
+        inventory: function () { return inventory(false); },
+        settings: function () { return tvSettings.read(); },
+        catalog: function () { return menuSettings.load(); },
+        monitor: function () { return monitor.snapshot('full').then(function(d){return Object.assign({},d,{telemetry:readTelemetry()});}); },
+        startup: function () { return monitor.startup(); },
+        network: function () { return tvSettings.readNetwork(); },
+        dns: function () { return dnsFilter.status(); },
+        mqtt: function () { return bridge.status(); },
+        privacy: function () { return privacy.read(); },
+        hbbtv: function () { return hbbtv.read(); },
+        probe: function () { return state; },
+        serviceApis: serviceApiProbe
+    }).finally(function () { diagnosticPending = null; });
+    return diagnosticPending.then(function (report) {
+        if (res.destroyed || res.writableEnded) return;
+        res.setHeader('Content-Disposition', 'attachment; filename="vetro-diagnostics.json"');
+        res.setHeader('Cache-Control', 'no-store');
+        serveJson(res, report);
+    }).catch(function () { serveJson(res, {error:'Diagnostic export unavailable'}, 503); });
+}
+
+// --- app installation through the platform adapter -------------------------
+function handleInstall(req, res) {
+    readJsonBody(req, res, function (parsed) {
+        packageInfo.read(parsed.path).then(function (info) {
+            return platform.install(info.packageId, parsed.path).then(function (output) {
+                serveJson(res, {submitted: true, verified: false, packageId: info.packageId,
+                    output: output, note: 'installation outcome requires verification on the TV'}, 202);
+            }).catch(function (error) {
+                serveJson(res, {submitted: error.submitted === false ? false : null, verified: false,
+                    error: String(error.message || error), note: 'verify installation outcome before retrying'}, 503);
+            });
+        }).catch(function (error) {
+            serveJson(res, {submitted: false, error: String(error.message || error)}, 400);
+        });
+    });
+}
+
+function readBody(req, cb, maxBytes) {
+    maxBytes = maxBytes || 65536;
+    var chunks = [], size = 0, finished = false;
+    var timer = setTimeout(function () { fail('request body timeout', 408); }, 10000);
+    function finish(body, err) {
+        if (finished) return;
+        finished = true;
+        clearTimeout(timer);
+        chunks = [];
+        cb(body, err);
+    }
+    function fail(message, code) {
+        var error = new Error(message);
+        error.statusCode = code;
+        finish(null, error);
+        if (req.resume) req.resume();
+    }
+    req.on('data', function (c) {
+        if (finished) return;
+        size += c.length;
+        if (size > maxBytes) return fail('request body exceeds ' + (maxBytes / 1024) + ' KiB', 413);
+        chunks.push(c);
+    });
+    req.on('end', function () {
+        if (!finished) finish(Buffer.concat(chunks).toString('utf8'));
+    });
+    req.on('error', function () { fail('bad request body', 400); });
+    req.on('aborted', function () { fail('request aborted', 400); });
+}
+
+function readJsonBody(req, res, cb, maxBytes) {
+    readBody(req, function (body, err) {
+        if (err) return serveJson(res, { error: err.message }, err.statusCode || 400);
+        var parsed;
+        try { parsed = JSON.parse(body); }
+        catch (e) { return serveJson(res, { error: 'expected a JSON object' }, 400); }
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+            return serveJson(res, { error: 'expected a JSON object' }, 400);
+        }
+        cb(parsed);
+    }, maxBytes);
+}
+
+// The TV agent executes commands serially. Start each request's timeout only
+// when it is actually sent, rather than while it waits behind other probes.
+var commandQueue=Promise.resolve(), queuedCommands=0;
+function agentExecute(cmd, timeoutMs) {
+    if(queuedCommands>=32)return Promise.reject(new Error('TV is busy; try again in a few seconds'));
+    queuedCommands++;
+    var result=commandQueue.then(function(){return platform.execute(cmd,timeoutMs||30000);});
+    commandQueue=result.catch(function(){});
+    return result.finally(function(){queuedCommands--;});
+}
+
+function handleExec(req, res) {
+    readBody(req, function (body, err) {
+        if (err) return serveJson(res, { error: err.message }, err.statusCode || 400);
+        var cmd = body;
+        try {
+            var parsed = JSON.parse(body);
+            cmd = parsed && !Array.isArray(parsed) && typeof parsed === 'object' ? parsed.cmd : null;
+        } catch (e) { /* retain support for plain-text commands */ }
+        if (typeof cmd !== 'string' || !cmd.trim()) {
+            return serveJson(res, { error: 'missing string "cmd" (JSON {"cmd":"..."})' }, 400);
+        }
+
+        agentExecute(cmd, 30000).then(function (r) {
+            serveJson(res, {
+                ok: r.exit_code === 0,
+                exit_code: r.exit_code,
+                timed_out: r.timed_out,
+                output: r.stdout,
+                stderr: r.stderr
+            });
+        }).catch(function (e) {
+            serveJson(res, { ok: false, error: String(e.message || e) }, 503);
+        });
+    });
+}
+
+function handleExecStatus(res) {
+    var current = platform.status();
+    serveJson(res, {connected: !!(current.agent && current.agent.connected), agent: current.agent});
+}
+
+// --- remote control (POST /control) ----------------------------------------
+// One remote press per call: the key name is whitelisted (control.js) and
+// the command is built from the whitelist, never from request text.
+
+function handleControl(req, res) {
+    if (req.method === 'GET') {
+        return serveJson(res, { keys: control.KEYS });
+    }
+    readJsonBody(req, res, function (parsed) {
+        var key = parsed.key;
+        if (!key || typeof key !== 'string') {
+            return serveJson(res, { error: 'missing "key" (see GET /control for names)' }, 400);
+        }
+        var cmd = control.injectCommand(key);
+        if (!cmd) {
+            return serveJson(res, { error: 'unknown key ' + key, keys: control.KEYS }, 400);
+        }
+        agentExecute(cmd, 10000).then(function (r) {
+            serveJson(res, { ok: r.exit_code === 0, key: key, exit_code: r.exit_code, output: r.stdout, stderr: r.stderr });
+        }).catch(function (e) {
+            serveJson(res, { ok: false, error: String(e.message || e) }, 503);
+        });
+    });
+}
+
+// --- MQTT configuration ----------------------------------------------------
+// POST /mqtt {"host": "...", "port": 1883, ...} validates and stores the
+// bridge config in the owner's persistent storage; the bridge picks it up
+// within its 30s config poll. GET returns the current effective config
+// (with the broker connection state).
+
+function handleMqttConfig(req,res){
+ var mod=require('./mqtt-bridge.js');
+ if(req.method==='GET')return serveJson(res,{config:mod.publicConfig(mod.readConfig()),status:bridge.status(),connected:bridge.connected});
+ readJsonBody(req,res,function(p){var cfg;try{cfg=mod.validateConfig(p,mod.readConfig());}catch(e){return serveJson(res,{ok:false,error:e.message},400);}
+  try{mod.saveConfig(cfg);}catch(e){return serveJson(res,{ok:false,error:'Configuration save failed'},500);}
+  bridge.configure(cfg);serveJson(res,{ok:true,config:mod.publicConfig(cfg),status:bridge.status()});
+ });
+}
+
+// --- debloat --------------------------------------------------------------
+// Lists ad/ACR/privacy services and delegates state changes to the platform
+// adapter. The standalone adapter reports these operations as unavailable.
+
+function handleDebloatList(req, res) {
+    agentExecute(debloat.listCommand(), 15000).then(function (r) {
+        if (r.exit_code !== 0 || r.timed_out) throw new Error('package discovery failed: ' + (r.stderr || r.exit_code));
+        serveJson(res, { services: debloat.parseList(r.stdout) });
+    }).catch(function (e) {
+        serveJson(res, { ok: false, error: String(e.message || e) }, 503);
+    });
+}
+
+var debloatBusy=false;
+function handleDebloatAction(req, res) {
+    readJsonBody(req, res, function (parsed) {
+        var action = parsed.action;          // "disable" | "enable"
+        var kind = parsed.kind || 'ads';     // "ads" | "privacy"
+        var appIds = parsed.appIds;          // optional explicit list
+        if (appIds != null && (!Array.isArray(appIds) || appIds.some(function (id) {
+            return typeof id !== 'string' || !/^[A-Za-z0-9_.-]+$/.test(id);
+        }))) {
+            return serveJson(res, { error: 'appIds must be an array of application IDs' }, 400);
+        }
+        if (kind !== 'ads' && kind !== 'privacy') {
+            return serveJson(res, { error: 'kind must be ads or privacy' }, 400);
+        }
+
+        if (action !== 'disable' && action !== 'enable') {
+            return serveJson(res, { error: 'action must be "disable" or "enable"' }, 400);
+        }
+
+        try { if (appIds) debloat.validateTargets(appIds, action === 'enable'); }
+        catch (e) { return serveJson(res, {ok:false,error:e.message},400); }
+        if (appIds && !appIds.length) return serveJson(res,{ok:true,changed:0,appIds:[]});
+
+        if (!appIds || appIds.length!==1 || debloat.VERIFIED_GLOBAL_IDS.indexOf(appIds[0])<0) return serveJson(res,{ok:false,error:'Disable and enable have not been tested for this component. Select a tested app.'},409);
+        if(debloatBusy)return serveJson(res,{ok:false,error:'App change already in progress'},409);debloatBusy=true;
+        var id=appIds[0],desired=action==='disable',original;
+        inventory(true).then(function(d){var row=d.apps.find(function(a){return a.appId===id;});if(d.registryError||!row||typeof row.disabled!=='boolean')throw Error('App registry unavailable');original=row.disabled;if(original===desired)return {ok:true,verified:true,changed:false,appId:id,disabled:desired};
+            return agentExecute('pkgcmd '+(desired?'-D':'-A')+' -t app -n '+id+' --global',15000).then(function(r){if(r.exit_code||r.timed_out)throw Error(r.stderr||r.stdout||'App state unchanged');registryAt=0;return inventory(true);}).then(function(after){var r=after.apps.find(function(a){return a.appId===id;});if(after.registryError||!r||r.disabled!==desired)throw Error('Global flag not confirmed');return {ok:true,verified:true,changed:true,appId:id,disabled:r.disabled,scope:'Global flag confirmed; running processes may remain until the next launch'};}).catch(function(e){return agentExecute('pkgcmd '+(original?'-D':'-A')+' -t app -n '+id+' --global',15000).then(function(r){if(r.exit_code||r.timed_out)throw Error('Restore not confirmed');registryAt=0;return inventory(true);}).then(function(d){var restored=d.apps.find(function(a){return a.appId===id;});throw Error(e.message+' · '+(restored&&restored.disabled===original&&!d.registryError?'previous flag restored':'restore not confirmed'));},function(){throw Error(e.message+' · restore not confirmed');});});
+        }).then(function(d){serveJson(res,d);}).catch(function(e){serveJson(res,{ok:false,error:e.message},503);}).finally(function(){debloatBusy=false;});
+
+    });
+}
+
+var tvSettings=new TVSettings(agentExecute);
+
+// --- probe, app inventory, settings, remapper -----------------------------
+// The widget UI collects data through the public Tizen/Samsung web APIs and
+// posts it here (POST /probe). The service never needs privileged access.
+var state = probe.load() || {};
+function serviceApiProbe() {
+    var result = {tizenObject: typeof tizen !== 'undefined', webapisObject: typeof webapis !== 'undefined'};
+    ['application', 'package', 'tvinputdevice', 'systeminfo'].forEach(function (name) {
+        try { result[name] = typeof tizen !== 'undefined' && typeof tizen[name] !== 'undefined'; }
+        catch (e) { result[name] = false; }
+    });
+    return result;
+}
+var REMAP_PATH = '/opt/usr/home/owner/share/vetro-remap.json';
+var remapStore = (function () {
+    try { return JSON.parse(fs.readFileSync(REMAP_PATH, 'utf8')); } catch (e) { return {}; }
+})();
+try { remapStore.rules = remap.validateRules(remapStore.rules || []); }
+catch (e) { remapStore.rules = []; }
+function saveRemap() {
+    try { fs.writeFileSync(REMAP_PATH, JSON.stringify(remapStore)); return true; } catch (e) { return false; }
+}
+
+function handleProbe(req, res) {
+    if (req.method === 'GET') {
+        if (/(?:\?|&)diagnostics=1(?:&|$)/.test(req.url || '')) {
+            return serveJson(res, {report: state, service: serviceApiProbe()});
+        }
+        return serveJson(res, state);
+    }
+    readJsonBody(req, res, function (parsed) {
+        try { state = probe.sanitize(parsed); }
+        catch (e) { return serveJson(res, { error: String(e.message || e) }, 400); }
+        serveJson(res, { ok: true, persisted: probe.save(state) });
+    }, probe.MAX_JSON);
+}
+
+var registryCache = null, registryAt = 0, registryPending = null;
+function inventory(refresh) {
+    if (!refresh && registryCache && Date.now()-registryAt<60000) return Promise.resolve(registryCache);
+    if (registryPending) return registryPending;
+    registryPending=AppRegistry.load(agentExecute,state).then(function(data){registryCache=data;registryAt=Date.now();return data;})
+        .catch(function(e){var rows=apps.normalize(state.apps,state.packages);return {apps:rows,summary:apps.summarize(rows),source:'public probe',registryError:String(e.message||e),collectedAt:state.receivedAt||null};})
+        .finally(function(){registryPending=null;});
+    return registryPending;
+}
+function handleComponentAction(req,res) {
+    readJsonBody(req,res,function(p) {
+        inventory(true).then(function(d) {
+            var a;
+            try { a=ComponentActions.validate(p,d.apps); }
+            catch(e) { e.statusCode=400;throw e; }
+            return agentExecute(ComponentActions.command(p,a),30000).then(function(r) {
+                registryAt=0;monitor.cached=null;
+                if(r.exit_code||r.timed_out)throw Error(r.stderr||r.stdout||'Action incomplete');
+                return Promise.all([inventory(true),p.action==='stop'?monitor.snapshot():Promise.resolve(null)]).then(function(results) {
+                    var after=results[0], row=after.apps.find(function(x){return x.appId===p.appId});
+                    var verified=p.action==='flags'?!!row&&row[p.flag]===p.enabled:
+                        p.action==='uninstall'?!after.registryError&&!after.apps.some(function(x){return x.packageId===a.packageId}):
+                        !results[1].processes.some(function(x){return x.appId===p.appId});
+                    serveJson(res,{ok:verified,verified:verified,action:p.action,appId:p.appId,packageId:a.packageId,changed:p.action==='flags'?a[p.flag]!==p.enabled:undefined,
+                        error:verified?null:'Requested state not confirmed; the component may have restarted.',output:r.stdout,apps:after.apps});
+                });
+            });
+        }).catch(function(e){serveJson(res,{ok:false,error:e.message},e.statusCode||503)});
+    });
+}
+function handleApps(req,res) {inventory(/refresh=1/.test(req.url)).then(function(data){serveJson(res,data);});}
+var iconCache = {};
+function handleIcon(req,res) {
+    var id=require('url').parse(req.url,true).query.appId;
+    if (!id || !/^[A-Za-z0-9_.-]{1,120}$/.test(id)) return serveJson(res,{error:'invalid appId'},400);
+    function send(icon){res.writeHead(200,{'content-type':icon.mime,'cache-control':'private, max-age=3600','X-Content-Type-Options':'nosniff'});res.end(icon.data);}
+    if(iconCache[id])return send(iconCache[id]);
+    inventory(false).then(function(data){var row=data.apps.find(function(r){return r.appId===id;}), command=AppRegistry.iconCommand(row);
+        if(!command)throw new Error('no readable icon');
+        return agentExecute(command,10000).then(function(r){if(r.exit_code||r.timed_out)throw new Error('icon unavailable');var data=Buffer.from(r.stdout.replace(/\s/g,''),'base64');
+            var png=data.slice(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10])), jpg=data[0]===255&&data[1]===216;
+            if((!png&&!jpg)||data.length>262144)throw new Error('unsupported icon');
+            var icon={data:data,mime:png?'image/png':'image/jpeg'};if(Object.keys(iconCache).length<100)iconCache[id]=icon;send(icon);
+        });
+    }).catch(function(){serveJson(res,{error:'icon unavailable'},404);});
+}
+function handleLaunch(req,res) {readJsonBody(req,res,function(p){
+    if(typeof p.appId!=='string'||! /^[A-Za-z0-9_.-]{1,120}$/.test(p.appId))return serveJson(res,{error:'invalid appId'},400);
+    inventory(false).then(function(data){if(!data.apps.some(function(r){return r.appId===p.appId;}))throw new Error('application not installed');return runActions([{type:'launch',appId:p.appId}]);})
+        .then(function(r){serveJson(res,r);}).catch(function(e){serveJson(res,{error:e.message},503);});
+});}
+
+function handleBlocklist(req, res) {
+    var q = (req.url || '').split('?')[1] || '';
+    var m = /(?:^|&)format=(hosts|domains)(?:&|$)/.exec(q);
+    var body = apps.blocklist(m ? m[1] : 'domains');
+    res.writeHead(200, { 'content-type': 'text/plain; charset=utf-8' });
+    res.end(body);
+}
+
+function handleSettings(req, res) {
+    serveJson(res, { items: settings.describe(), values: settings.sanitize(state.settings) });
+}
+
+function handleRemap(req, res) {
+    if (req.method === 'GET') return serveJson(res, { rules: remapStore.rules, paired: !!remapStore.token });
+    readJsonBody(req, res, function (parsed) {
+        var rules;
+        try { rules = remap.validateRules(parsed.rules); }
+        catch (e) { return serveJson(res, { error: String(e.message || e) }, 400); }
+        stopInput();
+        remapStore.rules = rules;
+        bridge.setTopics(rules.filter(function(r){return r.enabled&&r.trigger.type==='mqtt'}).map(function(r){return r.trigger.value}));
+        serveJson(res, { ok: true, persisted: saveRemap(), rules: rules });
+    });
+}
+
+function runActions(actions) {
+    var sent=0, skipped=[],mqttSent=0;
+    return actions.reduce(function(chain,a){return chain.then(function(){
+        var command;
+        if(a.type==='mqtt'){bridge.publish(a.topic,a.payload);sent++;mqttSent++;return;}
+        if(a.type==='launch')command='/usr/bin/app_launcher -s '+a.appId;
+        else if(a.type==='key'){var key=control.nativeKey(a.key);command=key&&control.injectCommand(key);if(!command)throw new Error('unsupported native key: '+a.key);}
+        else {skipped.push(a.type);return;}
+        return agentExecute(command,10000).then(function(r){if(r.exit_code||r.timed_out)throw new Error(r.stderr||'native action failed');sent++;});
+    });},Promise.resolve()).then(function(){return {ok:true,sent:sent,skipped:skipped,transport:mqttSent?(mqttSent===sent?'mqtt':'mixed'):'native'};});
+}
+var actionQueue=Promise.resolve(), pendingActions=0, inputError=null;
+var physical=new PhysicalInput(agentExecute,function(event){
+    if(event.action!=='down'||event.decision!=='blocked')return;
+    var actions=remap.resolve(remapStore.rules,'physical',String(event.code));
+    if(pendingActions>=8){physical.stop();inputError='input action queue exceeded';return;}
+    pendingActions++;
+    actionQueue=actionQueue.then(function(){return runActions(actions);}).catch(function(e){inputError=e.message;physical.stop();}).finally(function(){pendingActions--;});
+});
+var inputObservers=[];
+function stopInput(){inputObservers.forEach(function(b){b.stop();});inputObservers=[];physical.stop();}
+function inputSnapshot(){
+    if(!inputObservers.length)return physical.status();
+    var events=[],connected=false,errors=[];
+    inputObservers.forEach(function(b){var s=b.status();events=events.concat(s.events);connected=connected||s.policy.connected;if(s.error)errors.push(s.error);});
+    events.sort(function(a,b){return a.time_seconds-b.time_seconds||a.time_microseconds-b.time_microseconds;});
+    return {policy:{mode:'observe',device:'auto',connected:connected},events:events.slice(-30),error:errors.join('; ')||null};
+}
+function handleInput(req,res){
+    if(req.method==='GET')return physical.inventory().then(function(list){serveJson(res,{devices:list,status:inputSnapshot(),error:inputError});}).catch(function(e){serveJson(res,{devices:[],status:inputSnapshot(),error:e.message});});
+    readJsonBody(req,res,function(p){
+        var tokens=remapStore.rules.filter(function(r){return r.enabled&&r.trigger.type==='physical';}).map(function(r){return r.trigger.value;});
+        inputError=null;
+        if(p.mode==='off'){stopInput();return serveJson(res,{ok:true,status:inputSnapshot()});}
+        if(p.mode==='observe'&&p.device==='auto'){
+            stopInput();return physical.inventory().then(function(list){
+                var candidates=list.filter(function(d){return d.selectable;});
+                if(!candidates.length)throw new Error('no physical remote devices found');
+                inputObservers=candidates.map(function(){return new PhysicalInput(agentExecute,function(){});});
+                return Promise.all(candidates.map(function(d,i){return inputObservers[i].start(d.node,'observe',[]).catch(function(e){return {error:e.message};});}));
+            }).then(function(){var s=inputSnapshot();if(!s.policy.connected)throw new Error(s.error||'input helpers unavailable');serveJson(res,{ok:true,status:s});})
+            .catch(function(e){stopInput();serveJson(res,{ok:false,error:e.message},503);});
+        }
+        if(p.device==='auto')return serveJson(res,{error:'select the detected node before intercepting'},400);
+        stopInput();
+        physical.start(p.device,p.mode,tokens).then(function(status){serveJson(res,{ok:true,status:status});}).catch(function(e){serveJson(res,{ok:false,error:e.message},503);});
+    });
+}
+function handleRemapRun(req,res){readJsonBody(req,res,function(p){
+    if(typeof p.type!=='string'||typeof p.value!=='string')return serveJson(res,{error:'type and value required'},400);
+    runActions(remap.resolve(remapStore.rules,p.type,p.value,p.payload)).then(function(r){serveJson(res,r);}).catch(function(e){serveJson(res,{ok:false,error:e.message},503);});
+});}
+
+http.createServer(function (req, res) {
+    var url = (req.url || '/').split('?')[0];
+    if (url === '/diagnostics/download') {
+        if (req.method !== 'GET') return serveJson(res, {error:'Use GET to download diagnostics'}, 405);
+        return downloadDiagnostics(res);
+    }
+    // Packaged widget documents use an opaque (null) origin. Allow only its
+    // probe/status exchange, including the JSON POST preflight.
+    if ((url === '/probe' || url === '/status') && req.headers && req.headers.origin === 'null') {
+        res.setHeader('Access-Control-Allow-Origin', 'null');
+        res.setHeader('Vary', 'Origin');
+        if (req.method === 'OPTIONS') {
+            res.writeHead(204, {'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+                'Access-Control-Allow-Headers': 'Content-Type'});
+            return res.end();
+        }
+    }
+    if (req.method === 'POST') {
+        if (url === '/input') return handleInput(req,res);
+        if (url === '/apps/launch') return handleLaunch(req,res);
+        if (url === '/exec') return handleExec(req, res);
+        if (url === '/debloat') return handleDebloatAction(req, res);
+        if (url === '/dns') return readJsonBody(req,res,function(p){var task=p.action==='observe'?dnsFilter.observe():p.action==='apply'?dnsFilter.apply(p.enabled,p.domains):Promise.reject(Error('Invalid filter action'));task.then(function(d){serveJson(res,d)}).catch(function(e){serveJson(res,{error:e.message},503)});});
+        if (url === '/hbbtv') return readJsonBody(req,res,function(p){hbbtv.change(p.off,p.expected).then(function(d){privacy.cached=null;serveJson(res,d);}).catch(function(e){serveJson(res,{error:e.message},409);});});
+        if (url === '/home-order') return readJsonBody(req,res,function(p){var t=p.action==='restore'?homeOrder.restore():homeOrder.write(p.entries);t.then(function(d){serveJson(res,d)}).catch(function(e){serveJson(res,{error:e.message},409)});});
+        if (url === '/tv-menu') return readJsonBody(req,res,function(p){menuSettings.write(p.id,p.value).then(function(d){serveJson(res,d)}).catch(function(e){serveJson(res,{ok:false,error:e.message},409)});});
+        if (url === '/tv-settings') return readJsonBody(req,res,function(p){tvSettings.write(p).then(function(d){serveJson(res,d)}).catch(function(e){serveJson(res,{ok:false,error:e.message},409)});});
+        if (url === '/components/action') return handleComponentAction(req,res);
+        if (url === '/mqtt') return handleMqttConfig(req, res);
+        if (url === '/control') return handleControl(req, res);
+        if (url === '/install') return handleInstall(req, res);
+        if (url === '/probe') return handleProbe(req, res);
+        if (url === '/remap') return handleRemap(req, res);
+        if (url === '/remap/run') return handleRemapRun(req, res);
+        return serveJson(res, { error: 'POST not supported here' }, 405);
+    }
+    if (url === '/dns') return dnsFilter.status().then(function(d){serveJson(res,d)}).catch(function(e){serveJson(res,{error:e.message},503)});
+    if (url === '/home-order') return homeOrder.read().then(function(d){serveJson(res,d)}).catch(function(e){serveJson(res,{error:e.message},503)});
+    if (url === '/hbbtv') return hbbtv.read().then(function(d){serveJson(res,d);}).catch(function(e){serveJson(res,{error:e.message},503);});
+    if (url === '/privacy') return privacy.read().then(function(d){serveJson(res,d)}).catch(function(e){serveJson(res,{error:e.message},503)});
+    if (url === '/tv-menu') { var q=/[?&]id=([^&]+)/.exec(req.url||''), menuId=null; try { if(q)menuId=decodeURIComponent(q[1]); } catch(e) { return serveJson(res,{error:'Invalid menu ID'},400); } return (q?menuSettings.read(menuId):menuSettings.load()).then(function(d){serveJson(res,d)}).catch(function(e){serveJson(res,{error:e.message},503)}); }
+    if (url === '/monitor') { var scope=/[?&]scope=([^&]*)/.exec(req.url||'');if(scope&&!/^(summary|full)$/.test(scope[1]))return serveJson(res,{error:'Unsupported monitor scope'},400);return monitor.snapshot(scope?scope[1]:'full').then(function(d){d.telemetry=readTelemetry();serveJson(res,d);}).catch(function(e){serveJson(res,{error:e.message},503);}); }
+    if (url === '/startup') return Promise.all([inventory(false),monitor.startup().catch(function(e){return {error:e.message};})]).then(function(d){serveJson(res,{apps:d[0].apps,services:Array.isArray(d[1])?d[1]:[],serviceError:d[1].error||null});});
+    if (url === '/telemetry') return serveJson(res, readTelemetry());
+    if (url === '/status') return serveJson(res, Object.assign({}, platform.status(), {app: buildInfo}));
+    if (url === '/exec') return handleExecStatus(res);
+    if (url === '/debloat') return handleDebloatList(req, res);
+    if (url === '/mqtt') return handleMqttConfig(req, res);
+    if (url === '/control') return handleControl(req, res);
+    if (url === '/probe') return handleProbe(req, res);
+    if (url === '/input') return handleInput(req,res);
+    if (url === '/apps/icon') return handleIcon(req,res);
+    if (url === '/apps') return handleApps(req, res);
+    if (url === '/blocklist') return handleBlocklist(req, res);
+    if (url === '/tv-settings') return Promise.all([tvSettings.read().catch(function(e){return {items:[],error:e.message}}),dnsFilter.status().catch(function(e){return {error:e.message}}),tvSettings.readNetwork().catch(function(e){return {configurationError:e.message,services:[],interfaces:[],writable:false}})]).then(function(d){serveJson(res,{ts:Date.now(),items:d[0].items,scope:d[0].scope,error:d[0].error||null,network:Object.assign({},d[1],d[2]),device:settings.sanitize(state.settings)});});
+    if (url === '/settings') return handleSettings(req, res);
+    if (url === '/remap') return handleRemap(req, res);
+    if (url === '/' || url === '/index.html') return serveHtml(res, dashboardHtml());
+    serveJson(res, { error: 'not found' }, 404);
+}).listen(PORT, function () {
+    console.log('VETRO listening on ' + PORT);
+});
+
+platform.start();
+
+// MQTT bridge: publishes telemetry + Home Assistant discovery when a broker
+// is configured (/tmp/vetro-mqtt.json). Harmless no-op without config.
+var mqttLastTrigger=Object.create(null);
+var bridge = new MqttBridge(readTelemetry,function(m){
+ var actions=remap.resolve(remapStore.rules,'mqtt',m.topic,m.payload.toString('utf8'));if(!actions.length)return;
+ var now=Date.now();if(pendingActions>=8||now-(mqttLastTrigger[m.topic]||0)<500){bridge.event('throttled','Trigger rate limited: '+m.topic);return;}
+ mqttLastTrigger[m.topic]=now;pendingActions++;
+ actionQueue=actionQueue.then(function(){return runActions(actions);}).then(function(r){bridge.event('trigger','Rule executed: '+m.topic+' · '+r.sent+' azioni');}).catch(function(e){bridge.event('error','Regola MQTT: '+e.message);}).finally(function(){pendingActions--;});
+});
+bridge.setTopics(remapStore.rules.filter(function(r){return r.enabled&&r.trigger.type==='mqtt'}).map(function(r){return r.trigger.value}));
+bridge.start();
+
+// Restore only an explicitly saved local domain filter once the adapter is ready.
+var dnsRestoreAttempts=0;var dnsRestoreTimer=setInterval(function(){if(++dnsRestoreAttempts>12){clearInterval(dnsRestoreTimer);return}if(platform.status().agent.connected){dnsFilter.restore().then(function(s){if(!s.enabled||s.applied)clearInterval(dnsRestoreTimer)}).catch(function(){})}},5000);if(dnsRestoreTimer.unref)dnsRestoreTimer.unref();
