@@ -297,12 +297,12 @@ function handleDebloatAction(req, res) {
         catch (e) { return serveJson(res, {ok:false,error:e.message},400); }
         if (appIds && !appIds.length) return serveJson(res,{ok:true,changed:0,appIds:[]});
 
-        if (!appIds || appIds.length!==1 || debloat.VERIFIED_GLOBAL_IDS.indexOf(appIds[0])<0) return serveJson(res,{ok:false,error:'Disable and enable have not been tested for this component. Select a tested app.'},409);
+        if (!appIds || appIds.length!==1) return serveJson(res,{ok:false,error:'Select one installed component to disable or enable.'},409);
         if(debloatBusy)return serveJson(res,{ok:false,error:'App change already in progress'},409);debloatBusy=true;
         var id=appIds[0],desired=action==='disable',original;
-        inventory(true).then(function(d){var row=d.apps.find(function(a){return a.appId===id;});if(d.registryError||!row||typeof row.disabled!=='boolean')throw Error('App registry unavailable');original=row.disabled;if(original===desired)return {ok:true,verified:true,changed:false,appId:id,disabled:desired};
+        inventory(true).then(function(d){var row=d.apps.find(function(a){return a.appId===id;});if(d.registryError)throw Error('App registry unavailable');if(!row){var missing=Error('App not installed');missing.statusCode=409;throw missing;}var capability=ComponentActions.availability(row,d.apps,debloat.VERIFIED_GLOBAL_IDS).toggle;if(!capability.allowed){var unavailable=Error(capability.reason);unavailable.statusCode=409;throw unavailable;}original=row.disabled;if(original===desired)return {ok:true,verified:true,changed:false,appId:id,disabled:desired};
             return agentExecute('pkgcmd '+(desired?'-D':'-A')+' -t app -n '+id+' --global',15000).then(function(r){if(r.exit_code||r.timed_out)throw Error(r.stderr||r.stdout||'App state unchanged');registryAt=0;return inventory(true);}).then(function(after){var r=after.apps.find(function(a){return a.appId===id;});if(after.registryError||!r||r.disabled!==desired)throw Error('Global flag not confirmed');return {ok:true,verified:true,changed:true,appId:id,disabled:r.disabled,scope:'Global flag confirmed; running processes may remain until the next launch'};}).catch(function(e){return agentExecute('pkgcmd '+(original?'-D':'-A')+' -t app -n '+id+' --global',15000).then(function(r){if(r.exit_code||r.timed_out)throw Error('Restore not confirmed');registryAt=0;return inventory(true);}).then(function(d){var restored=d.apps.find(function(a){return a.appId===id;});throw Error(e.message+' · '+(restored&&restored.disabled===original&&!d.registryError?'previous flag restored':'restore not confirmed'));},function(){throw Error(e.message+' · restore not confirmed');});});
-        }).then(function(d){serveJson(res,d);}).catch(function(e){serveJson(res,{ok:false,error:e.message},503);}).finally(function(){debloatBusy=false;});
+        }).then(function(d){debloatBusy=false;serveJson(res,d);}).catch(function(e){debloatBusy=false;serveJson(res,{ok:false,error:e.message},e.statusCode||503);});
 
     });
 }
@@ -356,23 +356,25 @@ function inventory(refresh) {
 }
 function handleComponentAction(req,res) {
     readJsonBody(req,res,function(p) {
+        if(debloatBusy)return serveJson(res,{ok:false,error:'App change already in progress'},409);debloatBusy=true;
         inventory(true).then(function(d) {
+            if(d.registryError)throw Error('App registry unavailable; no command sent');
             var a;
             try { a=ComponentActions.validate(p,d.apps); }
             catch(e) { e.statusCode=400;throw e; }
             return agentExecute(ComponentActions.command(p,a),30000).then(function(r) {
-                registryAt=0;monitor.cached=null;
+                registryAt=0;
                 if(r.exit_code||r.timed_out)throw Error(r.stderr||r.stdout||'Action incomplete');
-                return Promise.all([inventory(true),p.action==='stop'?monitor.snapshot():Promise.resolve(null)]).then(function(results) {
+                return Promise.all([inventory(true),p.action==='stop'?monitor.snapshot('full',true):Promise.resolve(null)]).then(function(results) {
                     var after=results[0], row=after.apps.find(function(x){return x.appId===p.appId});
                     var verified=p.action==='flags'?!!row&&row[p.flag]===p.enabled:
                         p.action==='uninstall'?!after.registryError&&!after.apps.some(function(x){return x.packageId===a.packageId}):
                         !results[1].processes.some(function(x){return x.appId===p.appId});
-                    serveJson(res,{ok:verified,verified:verified,action:p.action,appId:p.appId,packageId:a.packageId,changed:p.action==='flags'?a[p.flag]!==p.enabled:undefined,
+                    debloatBusy=false;serveJson(res,{ok:verified,verified:verified,action:p.action,appId:p.appId,packageId:a.packageId,changed:p.action==='flags'?a[p.flag]!==p.enabled:undefined,
                         error:verified?null:'Requested state not confirmed; the component may have restarted.',output:r.stdout,apps:after.apps});
                 });
             });
-        }).catch(function(e){serveJson(res,{ok:false,error:e.message},e.statusCode||503)});
+        }).catch(function(e){debloatBusy=false;serveJson(res,{ok:false,error:e.message},e.statusCode||503)});
     });
 }
 function handleApps(req,res) {inventory(/refresh=1/.test(req.url)).then(function(data){serveJson(res,data);});}

@@ -46,9 +46,9 @@ async function main() {
       assert.equal((await request('POST', '/debloat', JSON.stringify(body))).status, 400);
     });
   }
-  await check('unverified disable round trip cannot mutate the TV', async function () {
+  await check('missing registry cannot mutate the TV', async function () {
     const r=await request('POST','/debloat',JSON.stringify({action:'disable',appIds:['user.app']}));
-    assert.equal(r.status,409);assert.equal(JSON.parse(r.body).ok,false);
+    assert.equal(r.status,503);assert.equal(JSON.parse(r.body).ok,false);
   });
   await check('valid platform requests return 503 with the standalone adapter', async function () {
     assert.equal((await request('POST', '/control', '{"key":"XF86Home"}')).status, 503);
