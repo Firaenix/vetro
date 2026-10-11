@@ -33,8 +33,14 @@ filter mode requires a single detected node. Observe never grabs
 input. Filter requires saved enabled `physical` rules, with numeric evdev codes
 0..767. The helper forwards unconfigured key and synchronization events via
 uinput and withholds configured down/up/repeat events; actions execute on down.
-Socket closure releases the grab. Editing rules stops interception. Startup is
-off; activation is explicit. Native actions use `app_launcher` and the supported
+Socket closure releases the grab. The interception switch saves its enabled state
+and selected remote in the owner’s persistent remap store. Startup and helper
+disconnections retry the saved policy every five seconds once the adapter is ready.
+Unique device names allow event nodes to change after reboot; ambiguous names
+require the saved node to match. Editing rules releases the grab and then reapplies
+the saved policy with the current enabled physical rules. Observe mode temporarily
+pauses interception for key capture; it is never restored at startup. Explicitly
+turning the switch off persists that choice. A new installation defaults to off. Native actions use `app_launcher` and the supported
 `input_keyevent` whitelist, without the LAN WebSocket client. Injected keys go
 to the foreground application, not directly to arbitrary background apps.
 

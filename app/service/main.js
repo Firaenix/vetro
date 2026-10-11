@@ -417,7 +417,7 @@ function handleRemap(req, res) {
         var rules;
         try { rules = remap.validateRules(parsed.rules); }
         catch (e) { return serveJson(res, { error: String(e.message || e) }, 400); }
-        stopInput();
+        stopInput(); inputPaused=false;
         remapStore.rules = rules;
         bridge.setTopics(rules.filter(function(r){return r.enabled&&r.trigger.type==='mqtt'}).map(function(r){return r.trigger.value}));
         serveJson(res, { ok: true, persisted: saveRemap(), rules: rules });
@@ -439,25 +439,45 @@ var actionQueue=Promise.resolve(), pendingActions=0, inputError=null;
 var physical=new PhysicalInput(agentExecute,function(event){
     if(event.action!=='down'||event.decision!=='blocked')return;
     var actions=remap.resolve(remapStore.rules,'physical',String(event.code));
-    if(pendingActions>=8){physical.stop();inputError='input action queue exceeded';return;}
+    if(pendingActions>=8){inputPaused=true;physical.stop();inputError='input action queue exceeded';return;}
     pendingActions++;
-    actionQueue=actionQueue.then(function(){return runActions(actions);}).catch(function(e){inputError=e.message;physical.stop();}).finally(function(){pendingActions--;});
+    actionQueue=actionQueue.then(function(){return runActions(actions);}).catch(function(e){inputError=e.message;inputPaused=true;physical.stop();}).finally(function(){pendingActions--;});
 });
-var inputObservers=[];
+var inputObservers=[], inputPaused=false, inputRestoring=false;
+function inputPreference(){var p=remapStore.input;return p&&p.enabled===true&&typeof p.device==='string'?p:{enabled:false};}
+function saveInputPreference(preference){
+    var previous=remapStore.input;remapStore.input=preference;
+    if(!saveRemap()){remapStore.input=previous;throw new Error('Remote setting could not be saved to disk');}
+}
+function inputTokens(){return remapStore.rules.filter(function(r){return r.enabled&&r.trigger.type==='physical';}).map(function(r){return r.trigger.value;});}
+function restoreInput(){
+    var preference=inputPreference();
+    if(!preference.enabled||inputPaused||inputRestoring||physical.status().policy.connected||!platform.status().agent.connected||!inputTokens().length)return;
+    inputRestoring=true;
+    physical.inventory().then(function(list){
+        if(inputPaused||inputPreference()!==preference)return;
+        var device=list.find(function(d){return d.selectable&&d.name===preference.device&&(d.unique||d.node===preference.node);});
+        if(!device)throw new Error('Saved physical remote is unavailable');
+        return physical.start(device.node,'filter',inputTokens());
+    }).then(function(){inputError=null;}).catch(function(e){inputError=e.message;}).finally(function(){inputRestoring=false;});
+}
 function stopInput(){inputObservers.forEach(function(b){b.stop();});inputObservers=[];physical.stop();}
 function inputSnapshot(){
-    if(!inputObservers.length)return physical.status();
+    if(!inputObservers.length)return Object.assign({},physical.status(),{preference:inputPreference()});
     var events=[],connected=false,errors=[];
     inputObservers.forEach(function(b){var s=b.status();events=events.concat(s.events);connected=connected||s.policy.connected;if(s.error)errors.push(s.error);});
     events.sort(function(a,b){return a.time_seconds-b.time_seconds||a.time_microseconds-b.time_microseconds;});
-    return {policy:{mode:'observe',device:'auto',connected:connected},events:events.slice(-30),error:errors.join('; ')||null};
+    return {policy:{mode:'observe',device:'auto',connected:connected},preference:inputPreference(),events:events.slice(-30),error:errors.join('; ')||null};
 }
 function handleInput(req,res){
     if(req.method==='GET')return physical.inventory().then(function(list){serveJson(res,{devices:list,status:inputSnapshot(),error:inputError});}).catch(function(e){serveJson(res,{devices:[],status:inputSnapshot(),error:e.message});});
     readJsonBody(req,res,function(p){
-        var tokens=remapStore.rules.filter(function(r){return r.enabled&&r.trigger.type==='physical';}).map(function(r){return r.trigger.value;});
+        var tokens=inputTokens();
         inputError=null;
-        if(p.mode==='off'){stopInput();return serveJson(res,{ok:true,status:inputSnapshot()});}
+        if(p.mode==='off'){try{saveInputPreference({enabled:false});}catch(e){return serveJson(res,{ok:false,error:e.message},503);}inputPaused=false;stopInput();return serveJson(res,{ok:true,persisted:true,status:inputSnapshot()});}
+        if(p.mode!=='observe'&&p.mode!=='filter')return serveJson(res,{error:'invalid input mode'},400);
+        if(p.mode==='filter'&&p.device==='auto')return serveJson(res,{error:'select the detected node before intercepting'},400);
+        inputPaused=true;
         if(p.mode==='observe'&&p.device==='auto'){
             stopInput();return physical.inventory().then(function(list){
                 var candidates=list.filter(function(d){return d.selectable;});
@@ -469,7 +489,10 @@ function handleInput(req,res){
         }
         if(p.device==='auto')return serveJson(res,{error:'select the detected node before intercepting'},400);
         stopInput();
-        physical.start(p.device,p.mode,tokens).then(function(status){serveJson(res,{ok:true,status:status});}).catch(function(e){serveJson(res,{ok:false,error:e.message},503);});
+        physical.start(p.device,p.mode,tokens).then(function(status){
+            if(p.mode==='filter'){saveInputPreference({enabled:true,device:status.policy.device,node:status.policy.node});inputPaused=false;}
+            serveJson(res,{ok:true,persisted:p.mode==='filter',status:inputSnapshot()});
+        }).catch(function(e){physical.stop();serveJson(res,{ok:false,error:e.message},503);});
     });
 }
 function handleRemapRun(req,res){readJsonBody(req,res,function(p){
@@ -541,6 +564,8 @@ http.createServer(function (req, res) {
 });
 
 platform.start();
+// Retry after boot and helper disconnects, including late adapter availability.
+var inputRestoreTimer=setInterval(restoreInput,5000);if(inputRestoreTimer.unref)inputRestoreTimer.unref();
 
 // MQTT bridge: publishes telemetry + Home Assistant discovery when a broker
 // is configured (/tmp/vetro-mqtt.json). Harmless no-op without config.

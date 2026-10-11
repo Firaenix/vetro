@@ -1,0 +1,41 @@
+{
+  "date": "2026-10-11",
+  "version": "0.2.2",
+  "fix": "Persist the physical remote interception switch and restore it automatically when Vetro starts.",
+  "signedInstallationVerified": true,
+  "dashboardExactMatch": true,
+  "configurationPreserved": {
+    "appFlags": true,
+    "remapperRules": true,
+    "dnsResolvers": true,
+    "dnsDomains": true
+  },
+  "serviceRestart": {
+    "enabledRestored": true,
+    "disabledRestored": true
+  },
+  "tvReboot": {
+    "userConfirmed": true,
+    "manualVetroLaunch": false,
+    "serviceRunning": true,
+    "rootAgentConnected": true,
+    "rootAgentUid": 0,
+    "interceptionConnected": true,
+    "interceptionMode": "filter",
+    "uptimeSecondsAtVerification": 114.97,
+    "verifiedReboots": 2,
+    "distinctBootsVerified": true,
+    "secondUptimeSecondsAtVerification": 117.74
+  },
+  "packageSha256": "ca5c508f539b9759348d2149aa92540bf4527a13fbd98a4f40eaf3a7ae22babd",
+  "tests": {
+    "appSuites": 45,
+    "integrationSuites": 6
+  },
+  "physicalShortcutLaunch": {
+    "primeVideoButtonOpensStremioAfterAutomaticRestore": true,
+    "confirmedByOwner": true
+  },
+  "startupWindow": "Native key behavior remains until Vetro and the input helper finish starting. Filter connection was observed at approximately two minutes after reboot.",
+  "tizenTube": "The saved key was blocked and the TizenTube launch action returned no error; the owner saw YouTube. TizenTube behavior was not validated."
+}
