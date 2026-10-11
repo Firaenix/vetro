@@ -19,6 +19,10 @@ vm.runInNewContext(require('../service/dashboard')().match(/<script>([\s\S]*?)<\
  assert.equal(el('toggleApp').disabled,false,'removable user service must be eligible for disable');
  assert.equal(el('uninstallComponent').disabled,false,'removable user package must be eligible for uninstall');
  assert.match(drawer,/background component/i,'unavailable launch explains why');
+ sandbox.updateComponentRuntime({known:true,count:1,cpu:2,rss:1048576});
+ assert.equal(el('stopComponent').disabled,false);assert.equal(el('stopComponentReason').hidden,true,'running process must clear stale stop explanation');
+ sandbox.updateComponentRuntime({known:true,count:0,cpu:null,rss:0});
+ assert.equal(el('stopComponent').disabled,true);assert.equal(el('stopComponentReason').hidden,false);assert.match(el('stopComponentReason').textContent,/No linked/);
  sandbox.inventory=[{...app,system:true,removable:false}];sandbox.detail(app.appId);
  assert.equal(el('toggleApp').disabled,true);assert.equal(el('uninstallComponent').disabled,true);
  assert.match(el('detail').innerHTML,/system component|system packages/i,'disabled commands have visible reasons');
