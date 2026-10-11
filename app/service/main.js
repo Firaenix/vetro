@@ -87,7 +87,7 @@ function serveJson(res, obj, code) {
 }
 
 function serveHtml(res, html) {
-    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
     res.end(html);
 }
 

@@ -23,6 +23,14 @@ vm.runInNewContext(require('../service/dashboard')().match(/<script>([\s\S]*?)<\
  assert.equal(el('stopComponent').disabled,false);assert.equal(el('stopComponentReason').hidden,true,'running process must clear stale stop explanation');
  sandbox.updateComponentRuntime({known:true,count:0,cpu:null,rss:0});
  assert.equal(el('stopComponent').disabled,true);assert.equal(el('stopComponentReason').hidden,false);assert.match(el('stopComponentReason').textContent,/No linked/);
+ var performed=[];sandbox.runComponentAction=(a,p)=>{performed.push(p);return Promise.resolve(true)};sandbox.confirm=()=>false;
+ el('toggleApp').onclick();
+ assert.match(el('componentConfirmation').innerHTML,/Confirm disable/,'blocked browser dialogs must still show an in-page confirmation');
+ assert.equal(performed.length,0,'opening confirmation must not mutate the TV');
+ el('cancelComponentAction').onclick();assert.equal(performed.length,0);
+ el('toggleApp').onclick();el('confirmComponentAction').onclick();assert.equal(performed[0].action,'disable');
+ el('uninstallComponent').onclick();assert.match(el('componentConfirmation').innerHTML,/MCmYXNxgcu/,'uninstall confirmation identifies the whole package');
+ assert.equal(performed.length,1);el('cancelComponentAction').onclick();assert.equal(performed.length,1);
  sandbox.inventory=[{...app,system:true,removable:false}];sandbox.detail(app.appId);
  assert.equal(el('toggleApp').disabled,true);assert.equal(el('uninstallComponent').disabled,true);
  assert.match(el('detail').innerHTML,/system component|system packages/i,'disabled commands have visible reasons');

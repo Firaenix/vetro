@@ -1,3 +1,3 @@
 'use strict';
 // The package builder adds the committed source revision to this object.
-module.exports = {version: '0.2.1', sourceRevision: null};
+module.exports = {version: '0.2.2', sourceRevision: null};
