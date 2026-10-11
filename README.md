@@ -2,7 +2,7 @@
 
 An experimental TV manager for Samsung Tizen TVs. Vetro provides a browser dashboard for inspecting installed apps, processes, resource usage, startup flags and verified TV controls. An optional device integration supplies privileged operations and physical remote input.
 
-**Release status:** source preview. Only one TV model/firmware combination has device evidence. A general-purpose signed installer is not provided. Vetro 0.2.1 is installed on the test TV; its UI, diagnostic download and background operation after closing the app have been verified. An unattended cold boot of this version remains to be tested.
+**Release status:** source preview. Only one TV model/firmware combination has device evidence. A general-purpose signed installer is not provided. Vetro 0.2.2 is installed on the test TV; its UI and in-page action confirmations have been verified. Diagnostic download and background operation after closing the app were verified on 0.2.1. An unattended cold boot of this version remains to be tested.
 
 ![Debloater with grouped components and separate app, process and startup states](app/docs/images/debloater.png)
 
@@ -35,7 +35,7 @@ These are the five original disabled-app flags restored for the performance comp
 
 For example, in **Debloater**, search for ACR, expand its group, select the component and choose **Disable**. Check the action result and refreshed **App state**; the disabled row turns gray. Check **Processes** separately for any remaining process and **Startup** for Boot/Restart flags. **Enable** reverses the disable flag. Use the task manager to compare CPU/RAM samples; the performance results below do not guarantee a particular saving.
 
-**e-Manual removal:** the owner reported an earlier complete uninstall, but the current live check still lists the web package `LzU5yAFXeg` (e-Manual 8.0.0) and the non-removable system component `org.tizen.emanual-app`. The native package list and both installation directories confirm their presence. Complete removal is therefore **not verified in the current state**; no package was uninstalled during this documentation check.
+**e-Manual removal:** the latest live check confirms the web package `LzU5yAFXeg` is absent after the owner removed it through Vetro. The separate non-removable system component `org.tizen.emanual-app` remains installed. Earlier checks had found both packages present; complete removal of every manual component is not claimed.
 
 To remove an eligible e-Manual web package, expand its entry in Debloater, verify its package ID and removability, then choose **Uninstall** and review the confirmation. Removal acts on the package, including its components. Check the action result and refreshed inventory afterward. The system companion is a separate package and remains protected from this uninstall path. Package removal is not reversed by **Enable**; recovery requires a suitable installer or the vendor's reinstall mechanism. Vetro does not promise complete removal of every built-in manual component.
 
@@ -160,7 +160,7 @@ To test unattended startup, record a boot checkpoint privately, fully power off 
 | Other Q80A variants / firmware | Similar platform is a hypothesis only | Unverified |
 | Other Samsung Tizen TVs | Public APIs may exist; signing, providers, runtime and root paths differ | Unverified |
 
-The installed integration recovered an authenticated UID-0 agent after one owner-confirmed cold boot without a manual launch on 2026-10-11. The 0.2.1 release integration is now installed: its source revision, complete diagnostic download and continued background operation after closing the app were verified. An unattended cold boot of this new version still needs checking.
+The installed integration recovered an authenticated UID-0 agent after one owner-confirmed cold boot without a manual launch on 2026-10-11. The 0.2.2 release integration is now installed: its source revision and in-page action confirmations were verified. Complete diagnostic download and continued background operation after closing the app were verified on 0.2.1. An unattended cold boot of this new version still needs checking.
 
 Local verification currently includes **44 app test suites**, **6 integration test suites** and parser tests. They cover validation, rollback/readback, root-agent authentication, detached launcher behavior, protocol handling, grouping, redaction and download behavior. Fixture tests do not establish device compatibility. See the [test and release audit](app/docs/RELEASE-AUDIT.md) for remaining checks.
 
@@ -224,3 +224,7 @@ On the test TV, a removable disposable web package was installed, disabled, enab
 The component drawer shows actions and status first, with package metadata below. Unavailable controls explain their restriction. App state, running processes and startup flags are separate: disabling an app does not prove its processes stopped or RAM was freed. Removal affects the whole package, including all its components.
 
 ![Component actions before package details](app/docs/images/debloater-actions.png)
+
+Disable, Stop and Uninstall use confirmations inside the component drawer. No native browser popup is required. Confirmations show the target and package scope before sending a command.
+
+![In-page package removal confirmation](app/docs/images/component-confirmation.png)

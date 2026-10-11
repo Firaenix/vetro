@@ -66,3 +66,9 @@ On 2026-10-11 a signed disposable `vtrtestapp` web package was installed on the 
 Actions are above collapsible package details. Disabled controls give a reason, verified changes remain visible in the drawer and session action history, and errors retain the drawer. This test does not validate arbitrary system-package removal, reinstatement after uninstall, or another cold boot.
 
 The corrected Vetro 0.2.1 build (`6a0c8cd`) was then signed and installed. Its served dashboard exactly matched the source. Original app flags, remapper rules and custom DNS were preserved. See the updated `release-installed.json` for the installed source revision and diagnostic results. Cold boot of this version remains untested.
+
+## Browser confirmation correction
+
+The owner reported that Disable and Uninstall worked in the embedded browser but silently did nothing in another PC browser because the native confirmation did not appear. A regression test suppresses `confirm()` and reproduces the missing confirmation. Vetro 0.2.2 replaces native dialogs with an in-page confirmation, explicit Cancel/Confirm controls, package scope and focus management. Dashboard HTML is served with `Cache-Control: no-store`. The latest read-only device check confirms the owner removed the e-Manual web package; its separate system companion remains.
+
+The installed 0.2.2 dashboard exactly matched the source and returned the no-store header. Browser Cancel did not change the fixture; Confirm disable produced verified Disabled state, Enable returned it to Enabled, and Confirm uninstall removed it from the inventory, native package list and filesystem. No browser console errors were observed. Native-dialog suppression is also covered by the regression test. Whole-TV app flag preservation is not asserted for this update because other app actions occurred concurrently. See `confirmation-validation.json`. The 44 application suites pass.

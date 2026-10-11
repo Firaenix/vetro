@@ -1,0 +1,14 @@
+{
+  "version": "0.2.2",
+  "sourceRevision": "cf215906e6d9dc77a6fd4916e814be8116b6f15b",
+  "dashboardExactMatch": true,
+  "dashboardNoStore": true,
+  "nativeBrowserDialogsRequired": false,
+  "fixtureDisableCancelConfirm": true,
+  "fixtureEnableConfirmed": true,
+  "fixtureUninstallConfirmed": true,
+  "fixtureRemovalNativeAndFiles": true,
+  "eManualWebPackagePresent": false,
+  "eManualSystemCompanionPresent": true,
+  "note": "App flags changed concurrently during device testing; whole-TV flag preservation for this update is not established."
+}
