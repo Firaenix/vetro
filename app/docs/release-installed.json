@@ -1,6 +1,6 @@
 {
-  "version": "0.2.0",
-  "sourceRevision": "f85e0fadc34296a0ea9af0b5b567bf3454a0e8c9",
+  "version": "0.2.1",
+  "sourceRevision": "6a0c8cd2411d80ffce2ed2304fcd1fddeff6cefc",
   "signedInstallationVerified": true,
   "dashboardExactMatch": true,
   "configurationPreserved": {
@@ -16,5 +16,14 @@
   "backgroundAfterUiClose": true,
   "rootAgentConnected": true,
   "rootAgentUid": 0,
-  "coldBootOfThisVersion": "not tested"
+  "coldBootOfThisVersion": "not tested",
+  "debloaterFixture": {
+    "disableEnableApi": true,
+    "disableEnableUi": true,
+    "bootFlagRoundTrip": true,
+    "launchStopUi": true,
+    "uninstallUi": true,
+    "nativeRemovalVerified": true,
+    "fixtureRemoved": true
+  }
 }

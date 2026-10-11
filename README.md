@@ -2,7 +2,7 @@
 
 An experimental TV manager for Samsung Tizen TVs. Vetro provides a browser dashboard for inspecting installed apps, processes, resource usage, startup flags and verified TV controls. An optional device integration supplies privileged operations and physical remote input.
 
-**Release status:** source preview. Only one TV model/firmware combination has device evidence. A general-purpose signed installer is not provided. Vetro 0.2.0 is installed on the test TV; its UI, diagnostic download and background operation after closing the app have been verified. An unattended cold boot of this version remains to be tested.
+**Release status:** source preview. Only one TV model/firmware combination has device evidence. A general-purpose signed installer is not provided. Vetro 0.2.1 is installed on the test TV; its UI, diagnostic download and background operation after closing the app have been verified. An unattended cold boot of this version remains to be tested.
 
 ![Debloater with grouped components and separate app, process and startup states](app/docs/images/debloater.png)
 
@@ -160,9 +160,9 @@ To test unattended startup, record a boot checkpoint privately, fully power off 
 | Other Q80A variants / firmware | Similar platform is a hypothesis only | Unverified |
 | Other Samsung Tizen TVs | Public APIs may exist; signing, providers, runtime and root paths differ | Unverified |
 
-The installed integration recovered an authenticated UID-0 agent after one owner-confirmed cold boot without a manual launch on 2026-10-11. The 0.2.0 release integration is now installed: its source revision, complete diagnostic download and continued background operation after closing the app were verified. An unattended cold boot of this new version still needs checking.
+The installed integration recovered an authenticated UID-0 agent after one owner-confirmed cold boot without a manual launch on 2026-10-11. The 0.2.1 release integration is now installed: its source revision, complete diagnostic download and continued background operation after closing the app were verified. An unattended cold boot of this new version still needs checking.
 
-Local verification currently includes **42 app test suites**, **6 integration test suites** and parser tests. They cover validation, rollback/readback, root-agent authentication, detached launcher behavior, protocol handling, grouping, redaction and download behavior. Fixture tests do not establish device compatibility. See the [test and release audit](app/docs/RELEASE-AUDIT.md) for remaining checks.
+Local verification currently includes **44 app test suites**, **6 integration test suites** and parser tests. They cover validation, rollback/readback, root-agent authentication, detached launcher behavior, protocol handling, grouping, redaction and download behavior. Fixture tests do not establish device compatibility. See the [test and release audit](app/docs/RELEASE-AUDIT.md) for remaining checks.
 
 ### Performance evidence
 
@@ -170,7 +170,7 @@ One exploratory cold-boot A/B sequence opened five apps and scrolled Netflix wit
 
 Separate exploratory samples measured service+agent CPU at about 0.44–0.51% of one core with the dashboard closed, 0.72–0.79% with summary monitoring and 2.07% with Task manager. Measurements include diagnostic overhead and are not total four-core capacity percentages. No validated per-app FPS or dropped-frame measurement exists. Compositor tuning was abandoned after lag/connection-loss reports. No governor or realtime scheduling change is offered.
 
-Still needed: repeated ABBA performance trials, visual readiness/frame-time measurements, more TV/firmware combinations, repeat unattended cold-boot validation on the newest package, real MQTT-broker tests, actual ads-request checks and uninstall/restore fixtures. Raw device reports remain private; [performance measurements](app/docs/PERFORMANCE.md) summarize evidence and limitations.
+Still needed: repeated ABBA performance trials, visual readiness/frame-time measurements, more TV/firmware combinations, repeat unattended cold-boot validation on the newest package, real MQTT-broker tests, actual ads-request checks and reinstall/restore fixtures. Raw device reports remain private; [performance measurements](app/docs/PERFORMANCE.md) summarize evidence and limitations.
 
 ## Submit a diagnostic report
 
@@ -216,3 +216,11 @@ Vetro is an independent, unofficial project. It is **not affiliated with, endors
 ## AI-assisted development
 
 Generative AI and coding agents assisted with implementation, debugging, documentation, UI revisions and diagnostic analysis. Automated tests and device observations validate specific behavior; generated code and automated compatibility comments are not guarantees. Contributions remain subject to human review, provenance checks and the same test requirements as manually written code.
+
+### Debloater action verification
+
+On the test TV, a removable disposable web package was installed, disabled, enabled, launched, stopped and uninstalled through Vetro. Start-at-boot was switched on and restored to off. Both the refreshed registry and native package list confirmed removal; the fixture installation directory was absent. Existing app flags, remote rules and custom DNS were unchanged. This establishes the action path on this TV, not uninstall support for arbitrary system packages.
+
+The component drawer shows actions and status first, with package metadata below. Unavailable controls explain their restriction. App state, running processes and startup flags are separate: disabling an app does not prove its processes stopped or RAM was freed. Removal affects the whole package, including all its components.
+
+![Component actions before package details](app/docs/images/debloater-actions.png)
