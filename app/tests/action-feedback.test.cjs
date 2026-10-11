@@ -1,6 +1,6 @@
 'use strict';
 const assert=require('assert').strict,vm=require('vm');
-const html=require(process.cwd()+'/service/dashboard.js')();
+const html=require('../service/dashboard.js')();
 const nodes={},el=id=>nodes[id]||(nodes[id]={value:'',hidden:true,textContent:'',innerHTML:'',disabled:false,focus(){}});
 let apps=[{appId:'example.app',packageId:'example.pkg',name:'Example <TV>',disabled:false,onboot:true,autorestart:true,category:'other'}];
 let mutation=()=>Promise.resolve({ok:true,verified:true}),inventoryError=null,monitorError=null;
