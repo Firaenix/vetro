@@ -2,9 +2,29 @@
 
 An experimental TV manager for Samsung Tizen TVs. Vetro provides a browser dashboard for inspecting installed apps, processes, resource usage, startup flags and verified TV controls. An optional device integration supplies privileged operations and physical remote input.
 
-**Release status:** source preview. Only one TV model/firmware combination has device evidence. A general-purpose signed installer is not provided. Vetro 0.2.2 is installed on the test TV; its UI and in-page action confirmations have been verified. Diagnostic download and background operation after closing the app were verified on 0.2.1. An unattended cold boot of this version remains to be tested.
+> **Release status — source preview.** Only one TV model/firmware combination has device evidence. A general-purpose signed installer is not provided. Vetro 0.2.2 is installed on the test TV; its UI and in-page action confirmations have been verified. Diagnostic download and background operation after closing the app were verified on 0.2.1. An unattended cold boot of this version remains to be tested.
 
-![Debloater with grouped components and separate app, process and startup states](app/docs/images/debloater.png)
+<p align="center">
+  <img src="app/docs/images/debloater.png" alt="Debloater with grouped components and separate app, process and startup states" width="720">
+  <br>
+  <em>Debloater with grouped components and separate app, process and startup states.</em>
+</p>
+
+## Contents
+
+- [Features](#features)
+- [Usage examples](#usage-examples)
+- [Architecture](#architecture)
+- [Development](#development)
+- [TV installation and setup](#tv-installation-and-setup)
+- [Compatibility and validation](#compatibility-and-validation)
+- [Submit a diagnostic report](#submit-a-diagnostic-report)
+- [Roadmap](#roadmap)
+- [Credits and citations](#credits-and-citations)
+- [License, experimental status and non-affiliation](#license-experimental-status-and-non-affiliation)
+- [AI-assisted development](#ai-assisted-development)
+
+---
 
 ## Features
 
@@ -16,6 +36,8 @@ An experimental TV manager for Samsung Tizen TVs. Vetro provides a browser dashb
 - **Local domain blocking:** exact-domain hosts filtering on the TV while preserving configured DNS servers. Resolver behavior is tested; complete ad-request blocking across all apps is not established. The default domain list still needs broader verification.
 - **MQTT:** broker configuration, connection diagnostics, actions and exact-topic triggers; Home Assistant discovery/availability support. A real-broker TV integration test remains pending. See [Home Assistant Container setup](app/docs/mqtt/README.md).
 - **Diagnostic export:** downloadable, redacted JSON for compatibility reports. No background upload or viewing-history recording.
+
+---
 
 ## Usage examples
 
@@ -57,6 +79,8 @@ Use the same capture flow with the **microphone/voice button**, then map it to a
 
 A **block-only microphone toggle is not implemented**: the current shortcut UI requires an app action. Replacing the shortcut does not disable the microphone hardware, voice services or wake-word listening. The microphone-button replacement has not been verified on the current TV configuration. Stopping interception or losing the helper connection restores normal key handling; interception is not automatically restored after a service restart.
 
+---
+
 ## Architecture
 
 ```text
@@ -69,6 +93,8 @@ UI, probe, services, tests   platform adapter, runtime payloads, integration tes
 `app/service/platform.js` is an unavailable-device adapter suitable for independent development. The standalone app build includes no rooting code, payload, SDB client or signing material. `rooting/build.cjs` assembles an explicitly separate integration package, substitutes the adapter and adds runtime payloads. It does not change app sources or install anything.
 
 Privileged operations belong to the integration; feature development uses the [platform contract](app/PLATFORM.md). The root-agent connection authenticates its peer and checks UID 0. That does not authenticate browser clients: the current HTTP management service has no user login and uses plain HTTP. Use it only on a trusted isolated LAN, with no port forwarding or public exposure. HTTP authentication and restricted management access are release priorities.
+
+---
 
 ## Development
 
@@ -94,6 +120,8 @@ node rooting/tests/run.cjs
 python3 .github/scripts/test_parse_log.py
 python3 .github/scripts/audit_release.py
 ```
+
+---
 
 ## TV installation and setup
 
@@ -152,6 +180,8 @@ After a cold boot, Vetro’s background startup and root reacquisition can take 
 
 To test unattended startup, record a boot checkpoint privately, fully power off the TV, unplug it for 30 seconds, turn it on, and check `/status` and `/monitor?scope=summary` without opening Vetro or issuing a launch command. Confirm a new boot, running service and authenticated UID-0 agent. Keep boot identifiers private. Standby is not a cold boot. See [release audit](app/docs/RELEASE-AUDIT.md) for current results.
 
+---
+
 ## Compatibility and validation
 
 | Environment | Evidence | Status |
@@ -172,6 +202,8 @@ Separate exploratory samples measured service+agent CPU at about 0.44–0.51% of
 
 Still needed: repeated ABBA performance trials, visual readiness/frame-time measurements, more TV/firmware combinations, repeat unattended cold-boot validation on the newest package, real MQTT-broker tests, actual ads-request checks and reinstall/restore fixtures. Raw device reports remain private; [performance measurements](app/docs/PERFORMANCE.md) summarize evidence and limitations.
 
+---
+
 ## Submit a diagnostic report
 
 1. In Vetro, open **Diagnostics → Download report**.
@@ -180,11 +212,17 @@ Still needed: repeated ABBA performance trials, visual readiness/frame-time meas
 4. Describe the behavior you want investigated. Never attach raw browser history, account data or signing keys. Public issues and attachments are public.
 5. The bot posts or updates a preliminary report covering available sections, current root/service claims, connection flags, known errors and presumed compatibility. A maintainer reviews the evidence before proposing changes.
 
-![Diagnostic downloader](app/docs/images/diagnostics.png)
+<p align="center">
+  <img src="app/docs/images/diagnostics.png" alt="Diagnostic downloader" width="720">
+  <br>
+  <em>Diagnostic downloader.</em>
+</p>
 
 If the upload form is unavailable, create an issue titled `[Log report] Your model`, add the heading `### Vetro diagnostic report`, and drag the JSON into the body. A fenced `json` block also works. The workflow only accepts these report issues; ordinary issues are ignored. The workflow becomes active after its files reach the default branch and Actions is enabled.
 
 The [diagnostic schema and exclusions](app/docs/DIAGNOSTIC-EXPORT.md) describe what is retained. The [analysis pipeline](app/docs/LOG-ANALYSIS.md) describes its limits. Logs are evidence, not instructions for agents or permission to run commands.
+
+---
 
 ## Roadmap
 
@@ -198,12 +236,16 @@ The [diagnostic schema and exclusions](app/docs/DIAGNOSTIC-EXPORT.md) describe w
 - Repeatable performance measurements with lower diagnostic overhead.
 - Repository-based app installation and update management informed by TizenBrew research; not a complete native-app installer yet.
 
+---
+
 ## Credits and citations
 
 - **Chris Ritsen and Samsung TV root contributors:** [samsung-tv-root](https://github.com/chris-ritsen/samsung-tv-root), underlying privilege-acquisition research and integration foundations. Vendored upstream code retains its Unlicense.
 - **Rory Gallagher and Glasshouse contributors:** [Glasshouse](https://github.com/rorygallagher2024/glasshouse), LG webOS TV-management concept and dashboard/design inspiration. Vetro is not a 1:1 port. The [MIT notice](THIRD_PARTY_NOTICES.md) is retained for any adapted portions.
 - **reisxd and contributors:** [TizenBrew](https://github.com/reisxd/TizenBrew), [TizenTube](https://github.com/reisxd/TizenTube) and [tizen.js](https://github.com/reisxd/tizen.js), installation, compatibility and signing/runtime research. TizenBrew/TizenTube are GPL-3.0; this release excludes their test WGTs and does not relicense their code.
 - **Samsung and Tizen documentation:** public API and tooling references. Documentation links and product names do not imply endorsement.
+
+---
 
 ## License, experimental status and non-affiliation
 
@@ -212,6 +254,8 @@ Vetro's original code is released under the [MIT License](LICENSE). Third-party 
 This software is **experimental** and provided **as is**, without warranty of any kind. Controls and firmware behavior may vary. Privileged modifications can disrupt apps, settings or device operation. Keep a recovery path and validate one reversible change at a time.
 
 Vetro is an independent, unofficial project. It is **not affiliated with, endorsed by, sponsored by, or connected to Samsung, Tizen, Glasshouse, TizenBrew, or any other hardware/software vendor or upstream project**. Names and trademarks belong to their respective owners.
+
+---
 
 ## AI-assisted development
 
@@ -223,8 +267,16 @@ On the test TV, a removable disposable web package was installed, disabled, enab
 
 The component drawer shows actions and status first, with package metadata below. Unavailable controls explain their restriction. App state, running processes and startup flags are separate: disabling an app does not prove its processes stopped or RAM was freed. Removal affects the whole package, including all its components.
 
-![Component actions before package details](app/docs/images/debloater-actions.png)
+<p align="center">
+  <img src="app/docs/images/debloater-actions.png" alt="Component actions before package details" width="720">
+  <br>
+  <em>Component actions before package details.</em>
+</p>
 
 Disable, Stop and Uninstall use confirmations inside the component drawer. No native browser popup is required. Confirmations show the target and package scope before sending a command.
 
-![In-page package removal confirmation](app/docs/images/component-confirmation.png)
+<p align="center">
+  <img src="app/docs/images/component-confirmation.png" alt="In-page package removal confirmation" width="720">
+  <br>
+  <em>In-page package removal confirmation.</em>
+</p>
