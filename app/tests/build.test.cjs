@@ -6,7 +6,7 @@ const files = build.collectFiles(); const names = files.map(file => decodeURICom
 assert.ok(names.includes('service/platform.js'));
 assert.deepEqual(names.slice().sort(), [
     'config.xml', 'icon.png', 'index.html',
-    'service/build-info.js', 'service/app-groups.js','service/app-registry.js', 'service/dashboard.js', 'service/physical-input.js', 'service/apps.js', 'service/component-actions.js','service/control.js',     'service/debloat.js', 'service/diagnostic-report.js', 'service/hbbtv.js','service/home-order.js','service/local-dns.js','service/menu-settings.js','service/main.js',
+    'service/build-info.js', 'service/app-groups.js','service/app-registry.js', 'service/dashboard.js', 'service/physical-input.js', 'service/presence.js', 'service/apps.js', 'service/component-actions.js','service/control.js',     'service/debloat.js', 'service/diagnostic-report.js', 'service/hbbtv.js','service/home-order.js','service/local-dns.js','service/menu-settings.js','service/main.js',
     'service/mqtt-bridge.js', 'service/mqtt.js', 'service/package-info.js',
     'service/platform.js', 'service/privacy.js', 'service/probe.js', 'service/remap.js',
     'service/samsung-remote.js', 'service/settings.js', 'service/system-monitor.js','service/tv-settings.js'
