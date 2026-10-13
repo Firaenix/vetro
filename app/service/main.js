@@ -24,6 +24,7 @@ var ComponentActions = require('./component-actions.js');
 var dnsFilter = new (require('./local-dns.js').Filter)(agentExecute);
 var homeOrder = new (require('./home-order.js').Order)(agentExecute);
 var hbbtv = new (require('./hbbtv.js').Control)(agentExecute);
+var presence = new (require('./presence.js').Presence)(agentExecute);
 var privacy = new (require('./privacy.js').Privacy)(agentExecute);
 var menuSettings = new (require('./menu-settings.js').Catalog)(agentExecute);
 var PORT = Number(process.env.VETRO_PORT) || 8099;
@@ -578,6 +579,16 @@ var bridge = new MqttBridge(readTelemetry,function(m){
 });
 bridge.setTopics(remapStore.rules.filter(function(r){return r.enabled&&r.trigger.type==='mqtt'}).map(function(r){return r.trigger.value}));
 bridge.start();
+
+// Foreground app for MQTT: read-only, one small status query every 5 seconds,
+// only while a broker connection is up. Names come from the stored probe.
+var presenceTimer=setInterval(function(){
+ if(!bridge.connected)return;
+ presence.read().then(function(d){
+  var fg=d.foreground;if(fg){var row=apps.normalize(state.apps,state.packages).filter(function(a){return a.appId===fg.appId})[0];fg=Object.assign({name:row&&row.name||fg.appId},fg);}
+  bridge.publishPresence(fg);
+ }).catch(function(){});
+},5000);if(presenceTimer.unref)presenceTimer.unref();
 
 // Restore only an explicitly saved local domain filter once the adapter is ready.
 var dnsRestoreAttempts=0;var dnsRestoreTimer=setInterval(function(){if(++dnsRestoreAttempts>12){clearInterval(dnsRestoreTimer);return}if(platform.status().agent.connected){dnsFilter.restore().then(function(s){if(!s.enabled||s.applied)clearInterval(dnsRestoreTimer)}).catch(function(){})}},5000);if(dnsRestoreTimer.unref)dnsRestoreTimer.unref();
