@@ -43,7 +43,7 @@ Privacy.prototype.read = function () {
         var s = sections(check(r));
         var hbbtv = vconfVal(s.HBBTV);
         var data = {
-            hbbtv: { dataService: num(hbbtv), off: hbbtv == null ? null : hbbtv === '0', appRunning: /^\d+$/.test((s.HBBTVAPP || []).join('').trim()) ? Number(s.HBBTVAPP.join('').trim()) > 0 : null },
+            hbbtv: { dataService: num(hbbtv), off: hbbtv == null ? null : (hbbtv === '0' || hbbtv === '19'), appRunning: /^\d+$/.test((s.HBBTVAPP || []).join('').trim()) ? Number(s.HBBTVAPP.join('').trim()) > 0 : null },
             doNotTrack: num(vconfVal(s.DNT)),
             acr: { recognitionStatus: num(vconfVal(s.ACR)), reset: num(vconfVal(s.ACRRESET)) },
             adId: { psidPresent: vconfVal(s.PSID) == null ? null : !!String(vconfVal(s.PSID)).trim() },
