@@ -50,7 +50,7 @@ function MqttBridge(getTelemetry,onMessage) {
     this.publishTimer = null;
     this.reconnectTimer = null;
     this.running = false;
-    this.discovered = false;this.discoveryTopics=[];this.availabilityTopic=null;this.legacyIdentity=legacyIdentity();this.identity=null;
+    this.discovered = false;this.discoveryTopics=[];this.availabilityTopic=null;this.lastPresence=null;this.legacyIdentity=legacyIdentity();this.identity=null;
 }
 
 MqttBridge.prototype._publishTelemetry = function () {
@@ -115,7 +115,58 @@ MqttBridge.prototype._discover = function () {
         var topic='homeassistant/sensor/'+client.identity+'/'+entityId+'/config';client.publish(topic, JSON.stringify(conf),{retain:true});client.discoveryTopics.push(topic);
     });
 
+    var fgTopic='homeassistant/sensor/'+client.identity+'/foreground-app/config';
+    client.publish(fgTopic, JSON.stringify({
+        name: 'Foreground app',
+        state_topic: prefix + '/foreground-app',
+        json_attributes_topic: prefix + '/foreground-app-attrs',
+        unique_id: client.identity+'_foreground-app',
+        availability_topic: client.availabilityTopic, payload_available:'online',payload_not_available:'offline',
+        device: device
+    }), {retain:true});client.discoveryTopics.push(fgTopic);
+
+    // Each native state has its own availability, in addition to the service LWT.
+    [['sensor','volume','Volume','volume','%'],
+     ['binary_sensor','muted','Muted','muted',null],
+     ['sensor','source','Source','source',null]].forEach(function(s){
+        var conf={name:s[2],state_topic:prefix+'/'+s[3],unique_id:client.identity+'_'+s[1],device:device,
+            availability:[{topic:client.availabilityTopic},{topic:prefix+'/'+s[3]+'/availability'}],
+            availability_mode:'all',payload_available:'online',payload_not_available:'offline'};
+        if(s[4])conf.unit_of_measurement=s[4];
+        if(s[0]==='binary_sensor'){conf.payload_on='ON';conf.payload_off='OFF';}
+        var topic='homeassistant/'+s[0]+'/'+client.identity+'/'+s[1]+'/config';
+        client.publish(prefix+'/'+s[3]+'/availability','offline',{retain:true});
+        client.publish(topic,JSON.stringify(conf),{retain:true});client.discoveryTopics.push(topic);
+    });
+
     this.discovered = true;
+};
+
+MqttBridge.prototype.publishTvState = function(d) {
+    if(!this.connected||!this.client||!this.identity)return;
+    d=d||{};
+    var prefix=(this.config.topicPrefix||'vetro')+'/'+this.identity;
+    var values={volume:Number.isInteger(d.volume)&&d.volume>=0&&d.volume<=100?d.volume:null,
+        muted:typeof d.muted==='boolean'?(d.muted?'ON':'OFF'):null,
+        source:typeof d.source==='string'&&/^(TV|HDMI[1-4])$/.test(d.source)?d.source:null};
+    var self=this;
+    Object.keys(values).forEach(function(key){
+        var value=values[key],available=value!==null;
+        if(available)self.publish(prefix+'/'+key,String(value),{retain:true});
+        self.publish(prefix+'/'+key+'/availability',available?'online':'offline',{retain:true});
+        if(!available)self.publish(prefix+'/'+key,'',{retain:true});
+    });
+};
+
+// Publishes the foreground app only when it changes. {name, appId, pid} or null.
+MqttBridge.prototype.publishPresence = function (fg) {
+    if (!this.connected || !this.client || !this.identity) return;
+    var key = fg ? fg.appId + ':' + fg.pid : 'none';
+    if (key === this.lastPresence) return;
+    var prefix = (this.config.topicPrefix || 'vetro')+'/'+this.identity;
+    this.publish(prefix + '/foreground-app', fg ? String(fg.name || fg.appId) : 'none', {retain:true});
+    this.publish(prefix + '/foreground-app-attrs', JSON.stringify(fg ? {app_id: fg.appId, pid: fg.pid} : {app_id: null, pid: null}), {retain:true});
+    this.lastPresence = key;
 };
 
 MqttBridge.prototype.start = function () {
@@ -169,7 +220,7 @@ MqttBridge.prototype._connect = function () {
         if (!self.running || self.client !== client) return;
         self.connected=true;self.state='connected';self.connectedAt=Date.now();self.lastError=null;self.event('connected','MQTT connection confirmed');
         self.subscriptions=self.topics.map(function(t){client.subscribe(t);return {topic:t,status:'pending'};});
-        self.discovered = false;self.publish(self.availabilityTopic,'online',{retain:true});
+        self.discovered = false;self.lastPresence = null;self.publish(self.availabilityTopic,'online',{retain:true});
         self._publishTelemetry();
         self._discover();
     });

@@ -27,6 +27,7 @@ const p = new Privacy(async function () { return { exit_code: 0, stdout: OUT }; 
     assert.equal(d.agreements.find(function (a) { return a.id === 'viewing'; }).agreed, true);
     assert.equal(d.agreements.find(function (a) { return a.id === 'main_common'; }).agreed, false);
     assert.ok(/service/.test(d.scope));
+    const menuOff=await new Privacy(async()=>({exit_code:0,stdout:OUT.replace('value = 0 (Int32)', 'value = 19 (Int32)')})).read();assert.equal(menuOff.hbbtv.off,true,'Samsung native menu Off is 19');
     const missing=await new Privacy(async()=>({exit_code:0,stdout:'__HBBTV__\nNo such file\n__TCF__\nNo such file\n__HBBTVAPP__\n\n__PSID__\nNo such file'})).read(); assert.equal(missing.hbbtv.off,null);assert.equal(missing.hbbtv.appRunning,null);assert.equal(missing.tvPlusConsent,null);assert.equal(missing.adId.psidPresent,null);assert.equal(missing.agreementsAvailable,null);
     const failed=await new Privacy(async()=>({exit_code:0,stdout:'__AGREE__\n__AGREE_STATUS__\n1\n__TCF__\nvalue = INVALID (Boolean)'})).read();assert.equal(failed.agreementsAvailable,false);assert.equal(failed.tvPlusConsent,null);
     console.log('PASS privacy: HbbTV/ACR/consent state parsed from vconf + HomeDataControl (TIFA marked unavailable)');

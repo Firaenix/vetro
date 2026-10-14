@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const crc32 = require('./service/package-info.js').crc32;
 function collectFiles() {
-    const names = ['config.xml', 'index.html', 'icon.png'].concat(
+    const names = ['config.xml', 'index.html', 'icon.png', 'native/TvState.dll', 'native/TvState.runtimeconfig.json'].concat(
         fs.readdirSync(path.join(__dirname,'service')).filter(name => name.endsWith('.js')).sort().map(name => 'service/' + name));
     const metadata = Object.assign({}, require('./service/build-info.js'));
     let revision = process.env.VETRO_SOURCE_REVISION;

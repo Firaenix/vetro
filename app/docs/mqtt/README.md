@@ -36,7 +36,24 @@ Open **MQTT** in Vetro's sidebar. Enter the same broker address and port, userna
 
 A connected state means the broker accepted the MQTT connection, rather than just a TCP socket opening. Vetro does not return the saved password to the page or include it in diagnostic exports. Leaving the password field blank preserves the saved password.
 
-Every 10 seconds, Vetro publishes available metrics and Home Assistant discovery configurations for five sensors: SoC temperature, CPU load, CPU frequency, RAM used and uptime. Some metrics may be unavailable on your TV. Discovery records are retained. Metrics use QoS 0; the sent counter does not confirm delivery.
+Every 10 seconds, Vetro publishes available metrics. Home Assistant discovery registers SoC temperature, load average, CPU frequency, RAM used, uptime, foreground app, volume, mute and source. Some metrics may be unavailable on your TV. Discovery records are retained. Metrics use QoS 0; the sent counter does not confirm delivery.
+
+### TV states for automations
+
+On the tested Q80A, audio/source reads run in the background without opening Vetro:
+
+| Entity | State topic suffix | Values |
+| --- | --- | --- |
+| Volume sensor | `volume` | Integer 0–100, TV volume scale |
+| Muted binary sensor | `muted` | `ON` / `OFF` |
+| Source sensor | `source` | `TV`, `HDMI1`–`HDMI4` when recognized |
+| Foreground app sensor | `foreground-app` | App name or ID, or `none` |
+
+The complete topic is `<prefix>/<identity>/<suffix>`. Volume, mute and source states are retained and refreshed every 10 seconds. Each has an additional `<suffix>/availability` topic; Home Assistant requires both that topic and service availability to be online. Failed reads clear the retained state and mark that entity unavailable instead of keeping a stale value. These are state entities, not controls. Existing explicit MQTT remapper rules provide actions such as launching an app or sending a supported native remote key.
+
+Current channel number/name is not exposed yet: the tested firmware's channel interface has no verified reader in Vetro. Source `TV` does not identify a tuned channel. Service availability also does not establish whether the screen is on.
+
+The native read-only helper source is `native/TvState.cs`; the packaged DLL targets the TV's .NET Core 3.1 runtime. To rebuild it with an existing SDK and reference assemblies, run `python3 scripts/build-tv-state.py --dotnet /absolute/path/to/dotnet --references /absolute/path/to/netcoreapp3.1/references`. No SDK download or installation is performed by this script.
 
 ### Availability and TV identity
 
@@ -64,6 +81,6 @@ A physical remote button can also publish an MQTT message. Enable physical input
 
 ## Validation status
 
-Protocol handling, trigger validation and discovery cleanup have local fixture tests. A real broker connected to the TV, including authentication and TLS, still needs testing.
+Protocol handling, trigger validation, discovery cleanup and native state validation have local fixture tests. The owner's TV was verified connected to its real broker on 2026-10-13: a separate diagnostic subscriber received nine retained discovery records, live telemetry, and retained volume `7`, mute `ON` and source `TV`, each with availability `online`. These audio/source values matched the native helper installed on the TV. Home Assistant UI behavior and real-broker TLS still require verification.
 
 References: [Home Assistant MQTT](https://www.home-assistant.io/integrations/mqtt/), [Mosquitto configuration](https://mosquitto.org/man/mosquitto-conf-5.html), [Mosquitto passwords](https://mosquitto.org/man/mosquitto_passwd-1.html).
