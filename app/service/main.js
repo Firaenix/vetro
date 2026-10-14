@@ -25,6 +25,7 @@ var dnsFilter = new (require('./local-dns.js').Filter)(agentExecute);
 var homeOrder = new (require('./home-order.js').Order)(agentExecute);
 var hbbtv = new (require('./hbbtv.js').Control)(agentExecute);
 var presence = new (require('./presence.js').Presence)(agentExecute);
+var tvState = new (require('./tv-state.js').Store)(agentExecute);
 var privacy = new (require('./privacy.js').Privacy)(agentExecute);
 var menuSettings = new (require('./menu-settings.js').Catalog)(agentExecute);
 var PORT = Number(process.env.VETRO_PORT) || 8099;
@@ -589,6 +590,12 @@ var presenceTimer=setInterval(function(){
   bridge.publishPresence(fg);
  }).catch(function(){});
 },5000);if(presenceTimer.unref)presenceTimer.unref();
+
+// Native audio/source reads require no foreground UI and never alter the TV.
+var tvStateTimer=setInterval(function(){
+ if(!bridge.connected)return;
+ tvState.read().then(function(d){bridge.publishTvState(d);}).catch(function(){bridge.publishTvState(null);});
+},10000);if(tvStateTimer.unref)tvStateTimer.unref();
 
 // Restore only an explicitly saved local domain filter once the adapter is ready.
 var dnsRestoreAttempts=0;var dnsRestoreTimer=setInterval(function(){if(++dnsRestoreAttempts>12){clearInterval(dnsRestoreTimer);return}if(platform.status().agent.connected){dnsFilter.restore().then(function(s){if(!s.enabled||s.applied)clearInterval(dnsRestoreTimer)}).catch(function(){})}},5000);if(dnsRestoreTimer.unref)dnsRestoreTimer.unref();

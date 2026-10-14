@@ -125,7 +125,37 @@ MqttBridge.prototype._discover = function () {
         device: device
     }), {retain:true});client.discoveryTopics.push(fgTopic);
 
+    // Each native state has its own availability, in addition to the service LWT.
+    [['sensor','volume','Volume','volume','%'],
+     ['binary_sensor','muted','Muted','muted',null],
+     ['sensor','source','Source','source',null]].forEach(function(s){
+        var conf={name:s[2],state_topic:prefix+'/'+s[3],unique_id:client.identity+'_'+s[1],device:device,
+            availability:[{topic:client.availabilityTopic},{topic:prefix+'/'+s[3]+'/availability'}],
+            availability_mode:'all',payload_available:'online',payload_not_available:'offline'};
+        if(s[4])conf.unit_of_measurement=s[4];
+        if(s[0]==='binary_sensor'){conf.payload_on='ON';conf.payload_off='OFF';}
+        var topic='homeassistant/'+s[0]+'/'+client.identity+'/'+s[1]+'/config';
+        client.publish(prefix+'/'+s[3]+'/availability','offline',{retain:true});
+        client.publish(topic,JSON.stringify(conf),{retain:true});client.discoveryTopics.push(topic);
+    });
+
     this.discovered = true;
+};
+
+MqttBridge.prototype.publishTvState = function(d) {
+    if(!this.connected||!this.client||!this.identity)return;
+    d=d||{};
+    var prefix=(this.config.topicPrefix||'vetro')+'/'+this.identity;
+    var values={volume:Number.isInteger(d.volume)&&d.volume>=0&&d.volume<=100?d.volume:null,
+        muted:typeof d.muted==='boolean'?(d.muted?'ON':'OFF'):null,
+        source:typeof d.source==='string'&&/^(TV|HDMI[1-4])$/.test(d.source)?d.source:null};
+    var self=this;
+    Object.keys(values).forEach(function(key){
+        var value=values[key],available=value!==null;
+        if(available)self.publish(prefix+'/'+key,String(value),{retain:true});
+        self.publish(prefix+'/'+key+'/availability',available?'online':'offline',{retain:true});
+        if(!available)self.publish(prefix+'/'+key,'',{retain:true});
+    });
 };
 
 // Publishes the foreground app only when it changes. {name, appId, pid} or null.
