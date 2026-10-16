@@ -28,6 +28,10 @@ var presence = new (require('./presence.js').Presence)(agentExecute);
 var tvState = new (require('./tv-state.js').Store)(agentExecute);
 var privacy = new (require('./privacy.js').Privacy)(agentExecute);
 var menuSettings = new (require('./menu-settings.js').Catalog)(agentExecute);
+var quickSettings = require('./quick-settings.js');
+var leftovers = new (require('./leftovers.js').Leftovers)(agentExecute);
+// Components whose disabled flag Vetro may change: verified ACR set plus Quick Settings groups.
+var TOGGLE_IDS = debloat.VERIFIED_GLOBAL_IDS.concat(quickSettings.ALLOWED_IDS);
 var PORT = Number(process.env.VETRO_PORT) || 8099;
 
 // --- telemetry reader (service side, uid 5001) ---------------------------
@@ -122,10 +126,12 @@ function downloadDiagnostics(res) {
 }
 
 // --- app installation through the platform adapter -------------------------
+var installPending = 0;
 function handleInstall(req, res) {
     readJsonBody(req, res, function (parsed) {
         packageInfo.read(parsed.path).then(function (info) {
-            return platform.install(info.packageId, parsed.path).then(function (output) {
+            installPending++;
+            return platform.install(info.packageId, parsed.path).finally(function () { installPending--; }).then(function (output) {
                 serveJson(res, {submitted: true, verified: false, packageId: info.packageId,
                     output: output, note: 'installation outcome requires verification on the TV'}, 202);
             }).catch(function (error) {
@@ -302,7 +308,7 @@ function handleDebloatAction(req, res) {
         if (!appIds || appIds.length!==1) return serveJson(res,{ok:false,error:'Select one installed component to disable or enable.'},409);
         if(debloatBusy)return serveJson(res,{ok:false,error:'App change already in progress'},409);debloatBusy=true;
         var id=appIds[0],desired=action==='disable',original;
-        inventory(true).then(function(d){var row=d.apps.find(function(a){return a.appId===id;});if(d.registryError)throw Error('App registry unavailable');if(!row){var missing=Error('App not installed');missing.statusCode=409;throw missing;}var capability=ComponentActions.availability(row,d.apps,debloat.VERIFIED_GLOBAL_IDS).toggle;if(!capability.allowed){var unavailable=Error(capability.reason);unavailable.statusCode=409;throw unavailable;}original=row.disabled;if(original===desired)return {ok:true,verified:true,changed:false,appId:id,disabled:desired};
+        inventory(true).then(function(d){var row=d.apps.find(function(a){return a.appId===id;});if(d.registryError)throw Error('App registry unavailable');if(!row){var missing=Error('App not installed');missing.statusCode=409;throw missing;}var capability=ComponentActions.availability(row,d.apps,TOGGLE_IDS).toggle;if(!capability.allowed){var unavailable=Error(capability.reason);unavailable.statusCode=409;throw unavailable;}original=row.disabled;if(original===desired)return {ok:true,verified:true,changed:false,appId:id,disabled:desired};
             return agentExecute('pkgcmd '+(desired?'-D':'-A')+' -t app -n '+id+' --global',15000).then(function(r){if(r.exit_code||r.timed_out)throw Error(r.stderr||r.stdout||'App state unchanged');registryAt=0;return inventory(true);}).then(function(after){var r=after.apps.find(function(a){return a.appId===id;});if(after.registryError||!r||r.disabled!==desired)throw Error('Global flag not confirmed');return {ok:true,verified:true,changed:true,appId:id,disabled:r.disabled,scope:'Global flag confirmed; running processes may remain until the next launch'};}).catch(function(e){return agentExecute('pkgcmd '+(original?'-D':'-A')+' -t app -n '+id+' --global',15000).then(function(r){if(r.exit_code||r.timed_out)throw Error('Restore not confirmed');registryAt=0;return inventory(true);}).then(function(d){var restored=d.apps.find(function(a){return a.appId===id;});throw Error(e.message+' · '+(restored&&restored.disabled===original&&!d.registryError?'previous flag restored':'restore not confirmed'));},function(){throw Error(e.message+' · restore not confirmed');});});
         }).then(function(d){debloatBusy=false;serveJson(res,d);}).catch(function(e){debloatBusy=false;serveJson(res,{ok:false,error:e.message},e.statusCode||503);});
 
@@ -377,6 +383,20 @@ function handleComponentAction(req,res) {
                 });
             });
         }).catch(function(e){debloatBusy=false;serveJson(res,{ok:false,error:e.message},e.statusCode||503)});
+    });
+}
+function handleQuick(req,res) {readJsonBody(req,res,function(p){
+    if(debloatBusy)return serveJson(res,{ok:false,error:'App change already in progress'},409);debloatBusy=true;
+    quickSettings.apply(p.id,p.off,{execute:agentExecute,inventory:inventory,invalidate:function(){registryAt=0;}})
+        .then(function(d){debloatBusy=false;serveJson(res,d);}).catch(function(e){debloatBusy=false;serveJson(res,{ok:false,error:e.message},e.statusCode||503);});
+});}
+function handleLeftovers(req,res) {
+    if(req.method==='GET')return leftovers.list().then(function(d){serveJson(res,d);}).catch(function(e){serveJson(res,{error:e.message},503);});
+    readJsonBody(req,res,function(p){
+        if(p.action!=='clear')return serveJson(res,{error:'Invalid leftovers action'},400);
+        // The platform stages packages in this folder while it installs them.
+        if(installPending)return serveJson(res,{ok:false,error:'An installation is in progress; try again when it finishes'},409);
+        leftovers.clear().then(function(d){serveJson(res,d);}).catch(function(e){serveJson(res,{ok:false,error:e.message},503);});
     });
 }
 function handleApps(req,res) {inventory(/refresh=1/.test(req.url)).then(function(data){serveJson(res,data);});}
@@ -530,6 +550,8 @@ http.createServer(function (req, res) {
         if (url === '/tv-menu') return readJsonBody(req,res,function(p){menuSettings.write(p.id,p.value).then(function(d){serveJson(res,d)}).catch(function(e){serveJson(res,{ok:false,error:e.message},409)});});
         if (url === '/tv-settings') return readJsonBody(req,res,function(p){tvSettings.write(p).then(function(d){serveJson(res,d)}).catch(function(e){serveJson(res,{ok:false,error:e.message},409)});});
         if (url === '/components/action') return handleComponentAction(req,res);
+        if (url === '/quick') return handleQuick(req,res);
+        if (url === '/leftovers') return handleLeftovers(req,res);
         if (url === '/mqtt') return handleMqttConfig(req, res);
         if (url === '/control') return handleControl(req, res);
         if (url === '/install') return handleInstall(req, res);
@@ -546,6 +568,7 @@ http.createServer(function (req, res) {
     if (url === '/monitor') { var scope=/[?&]scope=([^&]*)/.exec(req.url||'');if(scope&&!/^(summary|full)$/.test(scope[1]))return serveJson(res,{error:'Unsupported monitor scope'},400);return monitor.snapshot(scope?scope[1]:'full').then(function(d){d.telemetry=readTelemetry();serveJson(res,d);}).catch(function(e){serveJson(res,{error:e.message},503);}); }
     if (url === '/startup') return Promise.all([inventory(false),monitor.startup().catch(function(e){return {error:e.message};})]).then(function(d){serveJson(res,{apps:d[0].apps,services:Array.isArray(d[1])?d[1]:[],serviceError:d[1].error||null});});
     if (url === '/telemetry') return serveJson(res, readTelemetry());
+    if (url === '/leftovers') return handleLeftovers(req,res);
     if (url === '/status') return serveJson(res, Object.assign({}, platform.status(), {app: buildInfo}));
     if (url === '/exec') return handleExecStatus(res);
     if (url === '/debloat') return handleDebloatList(req, res);
