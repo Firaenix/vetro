@@ -22,5 +22,11 @@ package for a working device integration.
 - [Performance measurements and limitations](docs/PERFORMANCE.md)
 - [Startup delay test](docs/BOOT-TEST.md)
 
+The app catalog (`service/app-facts.js`) is generated from a private firmware dump:
+
+```sh
+python3 scripts/build-app-catalog.py /path/to/dump/rootfs /tmp/app-facts-full.json --compact service/app-facts.js
+```
+
 The default management port is 8099 (`VETRO_PORT` overrides it). TV-specific
 operations require the optional adapter and supported firmware/signing privileges.

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **Quick settings** is the first panel: switches for HbbTV, ACR viewing data, domain blocking, Alexa, Google Assistant, Bixby and voice services, with in-page confirmation for voice switches (the remote microphone button stops working). Groups apply the disabled flag to every installed member in one step, verify it in the registry, roll back on failure and stop members still running.
+- **Install leftovers** cleanup ported from Apps2Samsung (MIT): package files in the install staging folder, deleted one at a time, with bytes freed and storage before and after. Refused while an installation is running.
+- **App catalog** from the firmware manifests: area, role and purpose for each package; references from other packages, event and key-sequence launches and microphone/camera/location access in the component drawer. `app/scripts/build-app-catalog.py` regenerates `service/app-facts.js` from a private dump.
+- **Debloater** layout: role filters with counts, one State column, Startup listing only flags that are on, CPU/RAM only while sampled, duplicate names disambiguated, startup flags as switches.
+- The Remote panel polls only while listening; stopping capture returns to the saved interception choice.
+- Navigation grouped by task; HbbTV, domain blocking and MQTT use switches; privacy values use words instead of Yes/No.
 - Dashboard live sampling starts off. **Start live** samples the TV for 2 minutes and stops by itself; opening a component drawer takes one sample when process data is stale.
 - CPU, network and paging rates restart after a gap of more than 60 seconds instead of reporting an average over the idle period.
 
