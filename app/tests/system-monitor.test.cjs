@@ -10,9 +10,10 @@ const b=monitor.parse(snapshot(1200,900,60,1,400),a.sample,4000);
 assert.equal(b.data.cpu.percent,50);assert.equal(b.data.processes[0].cpuPercent,50);assert.equal(b.data.network[0].rxPerSecond,100);
 assert.equal(b.data.memory.availableBytes,0);assert.equal(b.data.memory.swapFreeBytes,0);assert.equal(b.data.storage.availableBytes,307200);
 assert.equal(b.data.zram.physicalBytes,5000);
+const stale=monitor.parse(snapshot(1200,900,60,1,400),a.sample,62000);assert.equal(stale.data.cpu.percent,null,'a sample over 60 s old is not a current rate');assert.equal(stale.data.processes[0].cpuPercent,null);assert.equal(stale.data.network[0].rxPerSecond,null);
 const reused=monitor.parse(snapshot(1400,1000,90,2,500),b.sample,7000);assert.equal(reused.data.processes[0].cpuPercent,null,'reused PID must start a new CPU sample');
 const units=monitor.parseUnits('hotel.service loaded inactive dead Hotel\n__FILES__\nhotel.service disabled\nnetwork.service enabled\n');assert.equal(units[0].bootState,'disabled');assert.equal(units[1].active,'not-loaded');
 let count=0,resolve;const m=new monitor.Monitor(()=>{count++;return new Promise(r=>{resolve=r})});const first=m.snapshot(),second=m.snapshot();assert.equal(first,second);resolve({exit_code:0,stdout:snapshot(1000,800,10,1,100)});
-first.then(()=>m.snapshot()).then(()=>{assert.equal(count,1,'simultaneous clients share one snapshot');console.log('PASS monitor: CPU deltas, PID reuse, shared snapshot, zero memory values, network rates and boot states');}).catch(e=>{console.error(e);process.exitCode=1});
+first.then(()=>m.snapshot()).then(()=>{assert.equal(count,1,'simultaneous clients share one snapshot');console.log('PASS monitor: CPU deltas, stale-gap baseline, PID reuse, shared snapshot, zero memory values, network rates and boot states');}).catch(e=>{console.error(e);process.exitCode=1});
 
 const mapped=monitor.parse('__APPS__\n user.ui (12)\n'+snapshot(1000,800,10,1,100),null,1000);assert.equal(mapped.data.processes[0].appId,'user.ui');

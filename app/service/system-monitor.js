@@ -5,6 +5,7 @@ var LIGHT = "echo '__BOOT__'; cat /proc/sys/kernel/random/boot_id; echo '__CPU__
 var DETAILS = "echo '__APPS__'; app_launcher -S; echo '__PAGE__'; getconf PAGESIZE; echo '__PROC__'; for f in /proc/[0-9]*/stat; do if IFS= read -r line < \"$f\" 2>/dev/null; then printf '%s' \"$line\"; echo; fi; done";
 var STORAGE = "echo '__DISK__'; df -k /opt";
 var UNITS = 'systemctl list-units --all --type=service --no-legend --plain --no-pager; echo __FILES__; systemctl list-unit-files --type=service --no-legend --no-pager';
+var MAX_DELTA_MS = 60000;
 function sections(text) {var out={},key=null;String(text||'').split('\n').forEach(function(l){var m=/^__(\w+)__$/.exec(l);if(m){key=m[1];out[key]=[];}else if(key)out[key].push(l);});return out;}
 function processStat(line,page) {
     var m=/^(\d+) \((.*)\) (\S+) (.*)$/.exec(line);if(!m)return null;
@@ -14,6 +15,8 @@ function processStat(line,page) {
 function parse(text,previous,now) {
     var s=sections(text),boot=(s.BOOT||[])[0]||null;
     if(previous&&boot&&previous.bootId&&boot!==previous.bootId)previous=null;
+    // Rates over a long idle gap would look current; start a new baseline instead.
+    if(previous&&now-previous.ts>MAX_DELTA_MS)previous=null;
     var cpu={},mem={},net={},page=+(s.PAGE||[])[0]||4096;
     (s.CPU||[]).forEach(function(l){var m=/^(cpu\d*)\s+(.+)$/.exec(l);if(!m)return;var v=m[2].trim().split(/\s+/).map(Number);cpu[m[1]]={total:v.slice(0,8).reduce(function(a,b){return a+b;},0),idle:(v[3]||0)+(v[4]||0)};});
     (s.MEM||[]).forEach(function(l){var m=/^(\w+):\s+(\d+)/.exec(l);if(m)mem[m[1]]=+m[2]*1024;});

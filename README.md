@@ -28,7 +28,7 @@ An experimental TV manager for Samsung Tizen TVs. Vetro provides a browser dashb
 
 ## Features
 
-- **Dashboard and task manager:** CPU, available RAM, swap/zram, storage, network rates and process samples. Dashboard summaries refresh every 5 seconds; process views every 10 seconds. Initial CPU rates may be unknown.
+- **Dashboard and task manager:** CPU, available RAM, swap/zram, storage, network rates and process samples. Live updates are off when the dashboard opens, so it sends no sampling commands to the TV until you choose **Start live**. A live session lasts 2 minutes and stops by itself; during it, summaries refresh every 5 seconds and process views every 10 seconds. The first CPU rates of a session are unknown.
 - **Debloater:** searchable app inventory, categories, icons where available and declared dependencies. Components share package rows; known cross-package families use explicit mappings. Categories are inferred and dependencies are not a complete runtime map.
 - **App and startup controls:** app enable/disable, launch, process stop, on-boot/auto-restart flags and removal of eligible user packages. Protected dependencies and Vetro cannot be indiscriminately removed. Disabled apps may still have running processes; boot flags do not exclude launches from dependencies.
 - **TV settings:** verified numeric image controls and limited advanced settings with readback and restore handling. Unknown settings remain read-only. Firmware menu entries are capability clues, not working controls.

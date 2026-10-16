@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Dashboard live sampling starts off. **Start live** samples the TV for 2 minutes and stops by itself; opening a component drawer takes one sample when process data is stale.
+- CPU, network and paging rates restart after a gap of more than 60 seconds instead of reporting an average over the idle period.
+
 ## 0.2.3 — unreleased
 
 - English-only service messages: MQTT validation and event log, MQTT rule results, local domain filter errors.
