@@ -5,6 +5,7 @@
 // into rows classified for the debloat view. Pure logic, no platform access.
 
 var debloat = require('./debloat.js');
+var catalog = require('./app-catalog.js');
 
 // Domains commonly reported for Samsung TV ads/ACR telemetry. To be reviewed
 // before use: served by GET /blocklist for an external DNS blocker (Pi-hole,
@@ -51,6 +52,7 @@ function normalize(apps, packages) {
             kind: kindOf(a.id, pkgId),
             protected: debloat.isProtected(a.id) || debloat.isProtected(pkgId)
         });
+        Object.assign(rows[rows.length - 1], describe(rows[rows.length - 1]));
     });
     rows.sort(function (x, y) { return x.appId < y.appId ? -1 : x.appId > y.appId ? 1 : 0; });
     return rows;
@@ -76,6 +78,11 @@ function classification(r) {
     return result(r.system?'system':'other','registry',r.system?'System package in the TV registry':'Function not classified');
 }
 function category(r){return classification(r).category;}
+// Area, role, purpose and firmware facts for the Debloater (app-catalog.js).
+function describe(r) {
+    var c = catalog.describe(r);
+    return {area: c.area, role: c.role, purpose: c.purpose, referencedBy: c.referencedBy, startsOn: c.startsOn, access: c.access, catalogSource: c.source};
+}
 
 function summarize(rows) {
     var out = {total: rows.length, ads: 0, privacy: 0, other: 0, protected: 0};
@@ -96,6 +103,7 @@ module.exports = {
     normalize: normalize,
     category: category,
     classification: classification,
+    describe: describe,
     summarize: summarize,
     blocklist: blocklist
 };
