@@ -1,0 +1,37 @@
+'use strict';
+const assert=require('assert').strict,vm=require('vm');
+const html=require('../service/dashboard.js')();
+const nodes={};const el=id=>nodes[id]||(nodes[id]={id,value:'',hidden:true,textContent:'',innerHTML:'',disabled:false,focus(){}});
+const alexa=['com.samsung.tv.alexa-client','com.samsung.tv.alexa-fullscreen-app','com.samsung.tv.alexa-jump-starter','com.samsung.tv.wakeup-engine-alexa'];
+let apps=alexa.map((id,i)=>({appId:id,packageId:'com.samsung.tv.alexa-client',name:id,disabled:i===3}));
+const calls=[];
+const sandbox={document:{getElementById:el,querySelectorAll:()=>[],querySelector:()=>null,addEventListener(){}},console,setTimeout(fn){return 1},clearTimeout(){},setInterval(){},
+ fetch:async(url,opts)=>{const body=opts&&opts.body?JSON.parse(opts.body):null;calls.push({url,body});let data={};
+  if(url.startsWith('/apps'))data={apps,summary:{total:apps.length},source:'package registry + public probe'};
+  else if(url==='/hbbtv')data={value:19,off:true,canRestore:true,restoreValue:20};
+  else if(url==='/dns')data={enabled:false,applied:false,domains:[],resolvers:[]};
+  else if(url==='/leftovers'&&!body)data={files:[{name:'old.wgt',size:2048,isPackage:true},{name:'device-profile.xml',size:10,isPackage:false}],packageBytes:2048,storageBefore:{availableBytes:1048576*900},errors:[]};
+  else if(url==='/quick'){apps=apps.map(a=>({...a,disabled:body.off}));data={ok:true,id:body.id,off:body.off,changed:alexa.slice(0,3),stopped:[alexa[0]],stopFailed:[],apps};}
+  else if(url==='/input')data={devices:[],status:{policy:{mode:'off'},events:[]}};else if(url==='/remap')data={rules:[]};
+  return {ok:true,json:async()=>data};}};
+vm.runInNewContext(html.match(/<script>([\s\S]*?)<\/script>/)[1],sandbox);
+const tick=()=>new Promise(r=>setImmediate(r));
+(async()=>{await tick();await tick();
+ assert.equal(sandbox.currentPanel,'quick','Quick settings is the first panel');
+ assert.ok(!calls.some(c=>c.url.startsWith('/monitor')),'no live sampling at start');
+ const voice=el('quickVoice').innerHTML;
+ assert.match(voice,/Partly on · 3 of 4 components enabled/);assert.match(voice,/data-quick-toggle="alexa" checked/,'partly on shows the switch on');
+ assert.match(el('quickPrivacy').innerHTML,/data-hbbtv-switch[^>]*aria-label="HbbTV"/);assert.doesNotMatch(el('quickPrivacy').innerHTML,/Yes|No</);
+ assert.match(el('quickPrivacy').innerHTML,/No domains saved/);assert.match(el('quickPrivacy').innerHTML,/data-quick-open="dns"/);
+ assert.match(el('quickStorage').innerHTML,/1 package file · 2 KiB/);
+ const sw={dataset:{quickToggle:'alexa'},checked:false};el('quick').onchange({target:sw});
+ assert.equal(sw.checked,true,'switch stays on until confirmed');assert.ok(!calls.some(c=>c.url==='/quick'),'microphone groups need confirmation');
+ assert.match(el('quickVoice').innerHTML,/microphone button on the remote/);
+ const confirm={dataset:{quickConfirm:'alexa'}};await el('quick').onclick({target:{closest:()=>confirm}});await tick();await tick();
+ assert.deepEqual(calls.find(c=>c.url==='/quick').body,{id:'alexa',off:true});
+ assert.ok(sandbox.inventory.filter(a=>alexa.includes(a.appId)).every(a=>a.disabled),'Debloater inventory reflects the change');
+ assert.match(el('quickVoice').innerHTML,/data-quick-toggle="alexa" aria-label/,'switch now off');
+ assert.match(sandbox.operationEntries[0].message,/3 components disabled; the TV registry confirms it. 1 running component stopped/);
+ const clear={dataset:{leftoversClear:''}};el('quick').onclick({target:{closest:()=>clear}});assert.match(el('quickStorage').innerHTML,/Delete 1 package file \(2 KiB\)\?/);assert.ok(!calls.some(c=>c.url==='/leftovers'&&c.body),'cleanup needs confirmation');
+ console.log('PASS quick UI: default panel, partial state, switches, microphone confirmation, shared inventory, cleanup confirmation');
+})().catch(e=>{console.error(e);process.exitCode=1});
