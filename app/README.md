@@ -20,6 +20,7 @@ package for a working device integration.
 - [Issue-analysis pipeline](docs/LOG-ANALYSIS.md)
 - [Home Assistant Container / MQTT setup](docs/mqtt/README.md)
 - [Performance measurements and limitations](docs/PERFORMANCE.md)
+- [Startup delay test](docs/BOOT-TEST.md)
 
 The default management port is 8099 (`VETRO_PORT` overrides it). TV-specific
 operations require the optional adapter and supported firmware/signing privileges.

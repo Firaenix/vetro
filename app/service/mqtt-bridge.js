@@ -31,12 +31,12 @@ function readConfig() {
 function newId(){return 'vetro-'+Math.random().toString(16).slice(2,10)+Math.random().toString(16).slice(2,10)+Math.random().toString(16).slice(2,10);}
 function legacyIdentity(){var file='/opt/usr/home/owner/share/vetro-device-id';try{var machine=fs.readFileSync('/etc/machine-id','utf8').trim();if(/^[a-f0-9]{32}$/i.test(machine))return {id:'vetro-'+machine.toLowerCase(),persistent:true};}catch(e){}try{var old=fs.readFileSync(file,'utf8').trim();if(/^vetro-[a-f0-9]{16,32}$/.test(old))return {id:old,persistent:true};}catch(e){}var id=newId();try{fs.writeFileSync(file,id+'\n',{mode:0o600});return {id:id,persistent:true};}catch(e){return {id:id,persistent:false};}}
 function publicConfig(cfg){var out=Object.assign({},cfg||{});out.hasPassword=!!out.password;delete out.password;return out;}
-function validateConfig(p,previous){previous=previous||{};if(p.enabled!=null&&typeof p.enabled!=='boolean')throw Error('enabled deve essere booleano');var enabled=p.enabled!==false;
+function validateConfig(p,previous){previous=previous||{};if(p.enabled!=null&&typeof p.enabled!=='boolean')throw Error('enabled must be a boolean');var enabled=p.enabled!==false;
  if(typeof p.host!=='string'||p.host.length>253||(!p.host&&enabled)||p.host&&!/^[A-Za-z0-9:._-]+$/.test(p.host))throw Error('Invalid MQTT host');
  if(p.port!=null&&(!Number.isInteger(p.port)||p.port<1||p.port>65535))throw Error('Invalid MQTT port');
  if(p.tls!=null&&typeof p.tls!=='boolean')throw Error('Invalid TLS option');
  var prefix=p.topicPrefix||'vetro';if(typeof prefix!=='string'||!/^[-A-Za-z0-9_.]+(?:\/[-A-Za-z0-9_.]+)*$/.test(prefix)||prefix.length>120)throw Error('Invalid topic prefix');
- ['username','password','deviceName','clientId','ca'].forEach(function(k){if(p[k]!=null&&(typeof p[k]!=='string'||p[k].length>(k==='ca'?32768:k==='password'?1024:120)))throw Error('Campo '+k+' invalid');});
+ ['username','password','deviceName','clientId','ca'].forEach(function(k){if(p[k]!=null&&(typeof p[k]!=='string'||p[k].length>(k==='ca'?32768:k==='password'?1024:120)))throw Error('Invalid field: '+k);});
  return {enabled:enabled,host:p.host,port:p.port||(p.tls?8883:1883),tls:p.tls===true,ca:p.ca||null,username:p.username||null,password:Object.prototype.hasOwnProperty.call(p,'password')?p.password:previous.password||null,topicPrefix:prefix,deviceName:p.deviceName||'Vetro',clientId:p.clientId||previous.clientId||newId()};
 }
 function saveConfig(cfg){var temp=CONFIG_PATH_PERSISTENT+'.tmp';fs.writeFileSync(temp,JSON.stringify(cfg)+'\n',{mode:0o600});fs.chmodSync(temp,0o600);fs.renameSync(temp,CONFIG_PATH_PERSISTENT);}
@@ -76,7 +76,6 @@ MqttBridge.prototype._publishTelemetry = function () {
         pub('ram-used-kb', mem.MemTotal != null && mem.MemAvailable != null ? mem.MemTotal - mem.MemAvailable : null);
         pub('ram-total-kb', mem.MemTotal);
     }
-    if (t.opt_df) pub('storage-opt-used', dfUsedPercent(t.opt_df));
 };
 
 MqttBridge.prototype._discover = function () {
@@ -227,10 +226,10 @@ MqttBridge.prototype._connect = function () {
 
     client.on('error',function(e){if(self.client!==client)return;self.lastError=String(e.message||e).slice(0,300);self.event('error',self.lastError);});
     client.on('subscribed',function(r){if(self.client!==client)return;self.subscriptions.forEach(function(s){if(s.topic===r.topic)s.status=r.accepted?'active':'refused'});self.event(r.accepted?'subscribed':'error',r.accepted?'Subscribed to topic: '+r.topic:'Subscription refused: '+r.topic);});
-    client.on('message',function(m){if(self.client!==client)return;self.received++;self.lastMessageAt=Date.now();self.event('message',m.topic+' · '+m.payload.length+' byte'+(m.retained?' · retained ignorato':''));if(m.retained||m.duplicate||m.payload.length>4096)return;self.onMessage(m);});
+    client.on('message',function(m){if(self.client!==client)return;self.received++;self.lastMessageAt=Date.now();self.event('message',m.topic+' · '+m.payload.length+' bytes'+(m.retained?' · retained, ignored':''));if(m.retained||m.duplicate||m.payload.length>4096)return;self.onMessage(m);});
     client.on('close', function () {
         if (self.client !== client) return;
-        self.client = null;self.connected=false;self.subscriptions=[];self.state='reconnecting';self.retryAt=Date.now()+10000;self.event('close','Connection chiuso');
+        self.client = null;self.connected=false;self.subscriptions=[];self.state='reconnecting';self.retryAt=Date.now()+10000;self.event('close','Connection closed');
         if (!self.running || !self.config || self.config.enabled === false || self.reconnectTimer) return;
         self.reconnectTimer = setTimeout(function () {
             self.reconnectTimer = null;
@@ -275,13 +274,6 @@ function parseMeminfo(s) {
         if (m) out[m[1]] = parseInt(m[2], 10);
     });
     return out;
-}
-
-function dfUsedPercent(dfLine) {
-    var parts = String(dfLine).trim().split(/\s+/);
-    // df -k: Filesystem 1K-blocks Used Available Use%
-    if (parts.length >= 5) return parts[4].replace('%', '');
-    return null;
 }
 
 module.exports = { MqttBridge, readConfig, CONFIG_PATH, CONFIG_PATH_PERSISTENT, publicConfig:publicConfig,validateConfig:validateConfig,saveConfig:saveConfig };

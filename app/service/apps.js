@@ -7,8 +7,9 @@
 var debloat = require('./debloat.js');
 
 // Domains commonly reported for Samsung TV ads/ACR telemetry. To be reviewed
-// before use: they are meant for a DNS blocker (Pi-hole, router), never applied
-// by Vetro itself.
+// before use: served by GET /blocklist for an external DNS blocker (Pi-hole,
+// router) and offered as suggestions by the local filter, which applies only
+// the domains the owner saves (local-dns.js).
 var BLOCKLIST_DOMAINS = [
     'samsungads.com',
     'config.samsungads.com',

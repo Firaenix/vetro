@@ -313,7 +313,7 @@ var tvSettings=new TVSettings(agentExecute);
 
 // --- probe, app inventory, settings, remapper -----------------------------
 // The widget UI collects data through the public Tizen/Samsung web APIs and
-// posts it here (POST /probe). The service never needs privileged access.
+// posts it here (POST /probe). Storing the probe needs no privileged access.
 var state = probe.load() || {};
 function serviceApiProbe() {
     var result = {tizenObject: typeof tizen !== 'undefined', webapisObject: typeof webapis !== 'undefined'};
@@ -570,13 +570,13 @@ platform.start();
 var inputRestoreTimer=setInterval(restoreInput,5000);if(inputRestoreTimer.unref)inputRestoreTimer.unref();
 
 // MQTT bridge: publishes telemetry + Home Assistant discovery when a broker
-// is configured (/tmp/vetro-mqtt.json). Harmless no-op without config.
+// is configured (persistent owner config, /tmp fallback). No-op without config.
 var mqttLastTrigger=Object.create(null);
 var bridge = new MqttBridge(readTelemetry,function(m){
  var actions=remap.resolve(remapStore.rules,'mqtt',m.topic,m.payload.toString('utf8'));if(!actions.length)return;
  var now=Date.now();if(pendingActions>=8||now-(mqttLastTrigger[m.topic]||0)<500){bridge.event('throttled','Trigger rate limited: '+m.topic);return;}
  mqttLastTrigger[m.topic]=now;pendingActions++;
- actionQueue=actionQueue.then(function(){return runActions(actions);}).then(function(r){bridge.event('trigger','Rule executed: '+m.topic+' · '+r.sent+' azioni');}).catch(function(e){bridge.event('error','Regola MQTT: '+e.message);}).finally(function(){pendingActions--;});
+ actionQueue=actionQueue.then(function(){return runActions(actions);}).then(function(r){bridge.event('trigger','Rule executed: '+m.topic+' · '+r.sent+' action(s)');}).catch(function(e){bridge.event('error','MQTT rule: '+e.message);}).finally(function(){pendingActions--;});
 });
 bridge.setTopics(remapStore.rules.filter(function(r){return r.enabled&&r.trigger.type==='mqtt'}).map(function(r){return r.trigger.value}));
 bridge.start();

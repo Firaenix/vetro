@@ -2,7 +2,7 @@
 
 An experimental TV manager for Samsung Tizen TVs. Vetro provides a browser dashboard for inspecting installed apps, processes, resource usage, startup flags and verified TV controls. An optional device integration supplies privileged operations and physical remote input.
 
-> **Release status — source preview.** Only one TV model/firmware combination has device evidence. A general-purpose signed installer is not provided. Vetro 0.2.2 is installed on the test TV; its UI and in-page action confirmations have been verified. Diagnostic download and background operation after closing the app were verified on 0.2.1. An unattended cold boot of this version remains to be tested.
+> **Release status — source preview.** Only one TV model/firmware combination has device evidence. A general-purpose signed installer is not provided. Vetro 0.2.2 is installed on the test TV; its UI and in-page action confirmations have been verified. Diagnostic download and background operation after closing the app were verified on 0.2.1. An unattended cold boot of this version remains to be tested. The source tree is at 0.2.3, which is not yet installed or verified on the TV.
 
 <p align="center">
   <img src="app/docs/images/debloater.png" alt="Debloater with grouped components and separate app, process and startup states" width="720">
@@ -32,7 +32,7 @@ An experimental TV manager for Samsung Tizen TVs. Vetro provides a browser dashb
 - **Debloater:** searchable app inventory, categories, icons where available and declared dependencies. Components share package rows; known cross-package families use explicit mappings. Categories are inferred and dependencies are not a complete runtime map.
 - **App and startup controls:** app enable/disable, launch, process stop, on-boot/auto-restart flags and removal of eligible user packages. Protected dependencies and Vetro cannot be indiscriminately removed. Disabled apps may still have running processes; boot flags do not exclude launches from dependencies.
 - **TV settings:** verified numeric image controls and limited advanced settings with readback and restore handling. Unknown settings remain read-only. Firmware menu entries are capability clues, not working controls.
-- **Physical remote shortcuts:** optional input helper can observe physical keys and map selected keys to native app launch/actions. Interception starts explicitly and stops on connection loss or rule changes. Public `tvinputdevice` APIs alone only receive foreground-app input.
+- **Physical remote shortcuts:** optional input helper can observe physical keys and map selected keys to native app launch/actions. Interception is enabled explicitly and saved on the TV. Connection loss or a rule change releases the keys; the saved setting is then retried every 5 seconds, including after a service restart or reboot. Public `tvinputdevice` APIs alone only receive foreground-app input.
 - **Local domain blocking:** exact-domain hosts filtering on the TV while preserving configured DNS servers. Resolver behavior is tested; complete ad-request blocking across all apps is not established. The default domain list still needs broader verification.
 - **MQTT:** broker configuration, connection diagnostics, actions and exact-topic triggers; Home Assistant discovery/availability support. A real-broker TV integration test remains pending. See [Home Assistant Container setup](app/docs/mqtt/README.md).
 - **Diagnostic export:** downloadable, redacted JSON for compatibility reports. No background upload or viewing-history recording.
@@ -69,7 +69,7 @@ An example is **Netflix button → Stremio**:
 2. Press the button once. Listening preserves its normal behavior and captures the device and key code.
 3. Select the detected device, choose Stremio under **App to open**, and choose **Save shortcut**.
 4. Choose **Enable interception**. Confirm that interception is connected, then test the button.
-5. Choose **Stop interception** to restore normal button handling. Editing a rule also stops interception; enable it again afterward.
+5. Choose **Stop interception** to restore normal button handling; this choice is saved. Editing a rule briefly releases the keys, then saved interception resumes automatically.
 
 The test TV currently has an enabled saved rule mapping physical code `221` to Stremio. Interception was **off** when checked: a saved rule alone does not replace the button. Capture the code on your own remote instead of assuming that `221` identifies the same button on another TV. Launches use the native platform adapter, not the LAN remote WebSocket API.
 
@@ -77,7 +77,7 @@ The test TV currently has an enabled saved rule mapping physical code `221` to S
 
 Use the same capture flow with the **microphone/voice button**, then map it to an app of your choice. While interception is connected, Vetro consumes the selected key event and launches that app instead of forwarding the original button event to the TV. This can replace the voice-assistant shortcut when that button is exposed by the selected input device.
 
-A **block-only microphone toggle is not implemented**: the current shortcut UI requires an app action. Replacing the shortcut does not disable the microphone hardware, voice services or wake-word listening. The microphone-button replacement has not been verified on the current TV configuration. Stopping interception or losing the helper connection restores normal key handling; interception is not automatically restored after a service restart.
+A **block-only microphone toggle is not implemented**: the current shortcut UI requires an app action. Replacing the shortcut does not disable the microphone hardware, voice services or wake-word listening. The microphone-button replacement has not been verified on the current TV configuration. Stopping interception restores normal key handling and is saved. Losing the helper connection restores normal key handling until saved interception is reapplied, within about 5 seconds once the helper is available again; this also happens after a service restart or reboot. A failed action or an overflowing action queue pauses interception until you enable it again or edit the rules.
 
 ---
 
@@ -192,11 +192,11 @@ To test unattended startup, record a boot checkpoint privately, fully power off 
 
 The installed integration recovered an authenticated UID-0 agent after one owner-confirmed cold boot without a manual launch on 2026-10-11. The 0.2.2 release integration is now installed: its source revision and in-page action confirmations were verified. Complete diagnostic download and continued background operation after closing the app were verified on 0.2.1. An unattended cold boot of this new version still needs checking.
 
-Local verification currently includes **44 app test suites**, **6 integration test suites** and parser tests. They cover validation, rollback/readback, root-agent authentication, detached launcher behavior, protocol handling, grouping, redaction and download behavior. Fixture tests do not establish device compatibility. See the [test and release audit](app/docs/RELEASE-AUDIT.md) for remaining checks.
+Local verification currently includes **47 app test suites**, **6 integration test suites** and parser tests. They cover validation, rollback/readback, root-agent authentication, detached launcher behavior, protocol handling, grouping, redaction and download behavior. Fixture tests do not establish device compatibility. See the [test and release audit](app/docs/RELEASE-AUDIT.md) for remaining checks.
 
 ### Performance evidence
 
-One exploratory cold-boot A/B sequence opened five apps and scrolled Netflix with identical commands. B restored five pre-existing disabled-app flags. Available RAM at the end was about **44 MiB higher** in B; mean TV CPU was **32.1% in A versus 29.6% in B**. B also had less free swap. HTTP key acknowledgements improved from median 120.5 to 100.7 ms, but these are not app loading times or visual response times. One pair does not establish causality or a smoother TV.
+One exploratory cold-boot A/B sequence opened five apps and scrolled Netflix with identical commands. B restored five pre-existing disabled-app flags. Available RAM at the end was about **43 MiB higher** in B; mean TV CPU was **32.1% in A versus 29.6% in B**. B also had less free swap. HTTP key acknowledgements improved from median 120.5 to 100.7 ms, but these are not app loading times or visual response times. One pair does not establish causality or a smoother TV.
 
 Separate exploratory samples measured service+agent CPU at about 0.44–0.51% of one core with the dashboard closed, 0.72–0.79% with summary monitoring and 2.07% with Task manager. Measurements include diagnostic overhead and are not total four-core capacity percentages. No validated per-app FPS or dropped-frame measurement exists. Compositor tuning was abandoned after lag/connection-loss reports. No governor or realtime scheduling change is offered.
 

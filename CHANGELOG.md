@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.3 — unreleased
+
+- English-only service messages: MQTT validation and event log, MQTT rule results, local domain filter errors.
+- Removed an unused MQTT storage publication that telemetry never supplied.
+- Read-only startup delay recorder (`app/scripts/boot-test.py`) with fixture tests and [instructions](app/docs/BOOT-TEST.md). The TV address comes from `--base` or `TV_IP`; no device address is built in.
+- English benchmark script messages and report text.
+- README corrections: saved remote interception resumes automatically after rule edits, helper reconnection and service restarts; current test-suite count; final RAM difference matches the performance summary.
+
+Not yet installed or verified on the test TV.
+
 ## Source preview — 2026-10-11
 
 - Minimal dark dashboard with English product copy and explicit app/process/startup states.
