@@ -7,7 +7,8 @@
 <p align="center">
   <a href="app/docs/INSTALLATION.md">Install on your TV</a> ·
   <a href="#debloat-with-context">Debloating</a> ·
-  <a href="#root-on-the-tv">Root & compatibility</a> ·
+  <a href="#root-on-the-tv">Root</a> ·
+  <a href="#compatibility">Compatibility</a> ·
   <a href="#development">Development</a>
 </p>
 
@@ -52,13 +53,29 @@ Turning a voice group off also affects the remote's microphone shortcut and voic
 
 Vetro's optional integration runs a background service and reacquires a root context through TV-local SDB. Once configured, the TV can manage its own root-agent connection without a computer keeping a session open. This is what enables privileged app, process, startup and system controls behind the dashboard.
 
-**Tested hardware:** Samsung **QE50Q80AATXZT**, **T-NKM2DEUC-2301.1**, Tizen 6, ARMv7. Other models and firmware remain unverified. Root and startup support depend on firmware, Developer Mode and your signing privileges; this is an experimental source release with no universal signed installer.
+Root and startup support depend on firmware, Developer Mode and your signing privileges; this is an experimental source release with no universal signed installer. See the [compatibility table](#compatibility) for tested hardware and upstream root evidence.
 
 Vetro **0.2.3** is installed on the test TV, with its source revision and authenticated UID-0 agent verified. Autonomous root recovery was observed after an earlier cold boot; unattended cold boot of 0.2.3 remains to be checked. Startup can take up to 90 seconds.
 
 The dashboard uses plain HTTP and currently has no browser login. Keep it on a trusted, isolated LAN with no public exposure. Privileged changes can disrupt TV features; review each target before changing it.
 
 [Install and configure Vetro →](app/docs/INSTALLATION.md) · [Integration details](rooting/README.md) · [Validation record](app/docs/RELEASE-AUDIT.md)
+
+## Compatibility
+
+**Vetro has been tested on one physical TV only.** The root technique may work more broadly: the upstream [SDK archive-launcher route](https://github.com/chris-ritsen/samsung-tv-root#archive-root-route) is model-independent and has been demonstrated on QN90B and QN90F. That is evidence for the technique, not confirmation that Vetro's packaged integration or controls work on those TVs.
+
+| TV / platform | Firmware | Evidence | Vetro status |
+| --- | --- | --- | --- |
+| **Q80A — QE50Q80AATXZT**, Tizen 6, ARMv7 | **T-NKM2DEUC-2301.1** | Vetro installed; authenticated root agent and device controls verified. | **Tested on one TV** |
+| QN90B — QN55QN90BAFXZA, Tizen 6.5, ARMv7 | T-PTMAKUC-1602.3 | Upstream root testing, including the archive-launcher route. | Untested |
+| QN90F — QN75QN90FAFXZA / QA55QN90FAUXEG, Tizen 9.0, AArch64 | 1203.0 / 1301.0 | Upstream root testing on both firmwares; the archive route is also demonstrated on QN90F, without a separate firmware matrix. | Untested; architecture/runtime differences may require adaptation |
+| S90D | Exact OS/firmware not established here | An owner reported the underlying route; upstream has not run its exact archive implementation on this model. | Untested |
+| Other Samsung Tizen TVs, including S90C | Unknown | Possible where the required SDB, .NET and launcher components remain available. | Compatibility unknown |
+
+There is no confirmed blanket Tizen version range. Firmware patches, runtime support, signing privileges and on-boot behavior can change the outcome even within the same model family.
+
+**Help expand this table:** if you try Vetro, open a [TV diagnostic report issue](https://github.com/andrearicci93/vetro/issues/new?template=log_report.yml) with your exact model, firmware, what worked or failed, and the JSON from **Diagnostics → Download report** if the dashboard is reachable. Failed attempts are useful too. The report is designed to exclude credentials, IP/MAC addresses, serial numbers and viewing history; review it before uploading. See the [diagnostic format](app/docs/DIAGNOSTIC-EXPORT.md).
 
 ## Also included
 
