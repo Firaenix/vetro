@@ -1,4 +1,5 @@
 'use strict';
+var execError = require('./exec-error.js');
 // Native controls identified on the Q80A; no arbitrary D-Bus method or key.
 var PREFIX='busctl --system call org.tizen.tv.avoc /org/tizen/tv/avoc org.tizen.tv.avoc.AvOutputControl ';
 var ITEMS=[
@@ -30,7 +31,7 @@ var ITEMS=[
  {id:'earc',label:'eARC',group:'audio',get:'GetEarcEnable',args:'',coded:true}
 ];
 function decode(text){var m=/^([iyu]{2})\s+(-?\d+)\s+(-?\d+)\s*$/.exec(String(text));if(!m)throw Error('Unrecognized setting response');if(+m[3]!==0)throw Error('Setting unavailable (code '+m[3]+')');return +m[2];}
-function check(r){if(r.exit_code||r.timed_out)throw Error(r.stderr||'TV read failed');return r.stdout;}
+function check(r){if(r.exit_code||r.timed_out)throw execError.failed(r,r.stderr||'TV read failed');return r.stdout;}
 function Store(execute){this.execute=execute;this.busy=false;this.cached=null;this.pending=null;}
 Store.prototype.read=function(){var self=this;if(this.cached&&Date.now()-this.cached.ts<2000)return Promise.resolve(this.cached);if(this.pending)return this.pending;
  var cmd=ITEMS.map(function(x){return 'echo __'+x.id+'__; '+PREFIX+x.get+' '+x.args;}).join('; ');

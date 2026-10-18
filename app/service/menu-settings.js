@@ -1,4 +1,5 @@
 'use strict';
+var execError = require('./exec-error.js');
 
 // Model menu data keys may identify provider requests or launchable panels,
 // not vconf storage. Read only declared vconf keys or storage candidates;
@@ -10,12 +11,12 @@ var DANGER = /(factory|aging|self.?test|internal.?pattern|panel.?mute|shop.?mode
 var TYPES = { integer: 'int', int32: 'int', uint32: 'int', int64: 'int', uint64: 'int', bool: 'bool', boolean: 'bool', string: 'string', double: 'double' };
 
 function wrap(s) { return 'echo ' + Buffer.from(s).toString('base64') + ' | base64 -d | sh'; }
-function check(r) { if (r.exit_code || r.timed_out) throw Error(r.stderr || r.stdout || 'TV menu unavailable'); return r.stdout || ''; }
+function check(r) { if (r.exit_code || r.timed_out) throw execError.failed(r, r.stderr || r.stdout || 'TV menu unavailable'); return r.stdout || ''; }
 function shq(s) { return "'" + String(s).replace(/'/g, "'\\''") + "'"; }
 
 function parseMenu(text) {
     var o;
-    try { o = JSON.parse(text); } catch (e) { throw Error('menu-tv.json unreadable'); }
+    try { o = JSON.parse(text); } catch (e) { throw execError.coded('unreadable', 'menu-tv.json unreadable'); }
     var items = o.menuitems || {}, tree = o.menutree || {};
     var parent = {};
     Object.keys(tree).forEach(function (k) { (tree[k].submenuitems || []).forEach(function (c) { if (parent[c] === undefined) parent[c] = k; }); });

@@ -1,9 +1,10 @@
 'use strict';
+var execError = require('./exec-error.js');
 // Q80A native menu verified 2026-10-13: Off=19, On=20.
 // Recognize legacy Vetro value 0 as Off; new writes use the native menu value.
 var fs=require('fs'),KEY='db/menu/system/data-service',FILE='/opt/usr/home/owner/share/vetro-hbbtv.json';
 function wrap(s){return 'echo '+Buffer.from(s).toString('base64')+' | base64 -d | sh';}
-function check(r){if(r.exit_code||r.timed_out)throw Error(r.stderr||r.stdout||'HbbTV unavailable');return r.stdout||'';}
+function check(r){if(r.exit_code||r.timed_out)throw execError.failed(r,r.stderr||r.stdout||'HbbTV unavailable');return r.stdout||'';}
 function Control(execute,storage){this.execute=execute;this.fs=storage||fs;this.busy=false;}
 Control.prototype.read=function(){var self=this;return this.execute(wrap('vconftool get '+KEY+' 2>&1'),6000).then(function(r){var m=/value = (-?\d+) \(Int32\)/.exec(check(r));if(!m)throw Error('HbbTV value unreadable');var v=Number(m[1]),saved=null;try{var b=JSON.parse(self.fs.readFileSync(FILE,'utf8'));if(Number.isInteger(b.value)&&b.value>0&&b.value!==19&&b.value<=2147483647)saved=b.value;}catch(e){}return {value:v,off:v===0||v===19,restoreValue:saved,canRestore:saved!==null,source:KEY,verification:'HbbTV storage and reload; visual effect must be checked on the TV'};});};
 Control.prototype.change=function(off,expected){var self=this;if(typeof off!=='boolean'||!Number.isInteger(expected))return Promise.reject(Error('Invalid HbbTV state'));if(this.busy)return Promise.reject(Error('HbbTV change already in progress'));this.busy=true;var previous;

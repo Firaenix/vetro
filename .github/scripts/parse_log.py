@@ -24,6 +24,20 @@ SIGNATURES = {
 }
 
 
+SECTIONS = ('platform', 'device', 'inventory', 'settings', 'catalog', 'monitor', 'startup', 'network', 'dns', 'mqtt', 'privacy', 'hbbtv', 'probe', 'serviceApis')
+STATUSES = ('unavailable', 'timeout')
+REASONS = {
+    'no-root-agent': 'no root agent connected',
+    'command-timeout': 'command timed out',
+    'command-failed': 'command failed',
+    'incomplete': 'incomplete data',
+    'unreadable': 'source unreadable',
+    'report-deadline': 'report deadline reached',
+    'no-reader': 'not collected',
+    'error': 'error',
+}
+
+
 def safe_token(value):
     return value if isinstance(value, str) and re.fullmatch(r'[A-Za-z0-9_.-]{1,100}', value) else 'Unknown'
 
@@ -32,6 +46,7 @@ def analyze(text):
     if not text.strip():
         raise ValueError('Empty report')
     findings = []
+    signatures = None
     try:
         report = json.loads(text)
     except json.JSONDecodeError:
@@ -60,6 +75,13 @@ def analyze(text):
         model = safe_token(device.get('realModel') or device.get('model'))
         firmware = safe_token(device.get('firmware'))
         findings.extend([('Model', model), ('Firmware', firmware)])
+        age = device.get('probeAgeMinutes')
+        if device.get('source') == 'widget-probe':
+            findings.append(('Model/firmware source', 'Reported by the Vetro widget' + (f'; last probe about {age} min before export' if type(age) is int and 0 <= age < 10**7 else '; probe age unknown') + ' (not read live)'))
+        revision = report.get('sourceRevision')
+        if isinstance(revision, str) and re.fullmatch(r'[a-f0-9]{40}', revision):
+            dirty = report.get('sourceDirty')
+            findings.append(('Source revision', revision[:7] + (' (build differed from it)' if dirty is True else ' (matched at build)' if dirty is False else ' (build state not recorded)')))
         p = data('platform')
         agent = p.get('rootAgent') if isinstance(p.get('rootAgent'), dict) else {}
         connected, uid = agent.get('connected'), agent.get('uid')
@@ -82,18 +104,31 @@ def analyze(text):
             findings.append(('Disabled components', str(disabled)))
         controls = data('settings').get('items')
         if isinstance(controls, list):
-            findings.append(('Reported writable TV controls', str(sum(isinstance(x, dict) and x.get('writable') is True and x.get('available') is True for x in controls))))
+            findings.append(('TV controls with a write path in Vetro', str(sum(isinstance(x, dict) and x.get('writable') is True and x.get('available') is True for x in controls)) + ' (not written or tested on this TV by the export)'))
         memory = data('monitor').get('memory', {})
         ram = memory.get('availableBytes') if isinstance(memory, dict) else None
         if type(ram) in (int, float) and 0 <= ram <= 2**50:
             findings.append(('Available RAM at capture', f'{ram / 1048576:.0f} MiB (not a performance comparison)'))
-        unavailable = sum(not isinstance(x, dict) or x.get('status') != 'ok' for x in sections.values())
-        findings.append(('Missing sections', str(unavailable)))
+        missing = []
+        for name in SECTIONS:
+            section = sections.get(name)
+            if not isinstance(section, dict) or section.get('status') == 'ok':
+                continue
+            status = section.get('status') if section.get('status') in STATUSES else 'unavailable'
+            reason = REASONS.get(section.get('reason'), 'reason not recorded')
+            code = section.get('exitCode')
+            missing.append(f'{name} ({status}: {reason}' + (f', exit code {code}' if type(code) is int and 0 <= code <= 255 else '') + ')')
+        extra = sum(1 for name in sections if name not in SECTIONS)
+        findings.append(('Sections not collected', f'{len(missing)}' + (': ' + '; '.join(missing) if missing else '') + (f' (plus {extra} unrecognised)' if extra else '')))
+        signatures = []
         if model == 'QE50Q80AATXZT' and firmware == 'T-NKM2DEUC-2301.1':
             compatibility = 'Matches the model and firmware of the single tested TV. This submitted snapshot is not independent verification of compatibility or persistence.'
         else:
             compatibility = 'Unverified model/firmware combination. A maintainer must review available controls before recommending changes.'
-    signatures = [label for label, pattern in SIGNATURES.items() if re.search(pattern, text, re.I)]
+    if signatures is None:
+        # Text signatures only make sense for free-form legacy logs. A structured report
+        # already says what failed, and its own status words must not match them.
+        signatures = [label for label, pattern in SIGNATURES.items() if re.search(pattern, text, re.I)]
     return {'findings': findings, 'signatures': signatures, 'compatibility': compatibility}
 
 

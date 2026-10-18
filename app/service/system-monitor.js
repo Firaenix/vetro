@@ -1,4 +1,5 @@
 'use strict';
+var execError = require('./exec-error.js');
 // One bounded snapshot shared by clients. /proc command lines and environment
 // are deliberately excluded: process names suffice for this read-only view.
 var LIGHT = "echo '__BOOT__'; cat /proc/sys/kernel/random/boot_id; echo '__CPU__'; cat /proc/stat; echo '__MEM__'; cat /proc/meminfo; echo '__NET__'; cat /proc/net/dev; echo '__VM__'; cat /proc/vmstat; echo '__ZRAM__'; cat /sys/block/zram0/mm_stat 2>/dev/null; echo '__BLOCK__'; for d in mmcblk0 zram0; do if test -r /sys/block/$d/stat; then printf '%s ' \"$d\"; cat /sys/block/$d/stat; fi; done; echo '__UPTIME__'; cat /proc/uptime";
@@ -43,11 +44,11 @@ function Monitor(execute){this.execute=execute;this.streams={};this.storage=null
 // per-process rates. Default full preserves the existing diagnostic API.
 Monitor.prototype.snapshot=function(scope,force){var self=this;scope=scope||'full';if(scope!=='full'&&scope!=='summary')return Promise.reject(Error('Unsupported monitor scope'));var stream=this.streams[scope]||(this.streams[scope]={});if(force){if(stream.pending)return stream.pending.catch(function(){}).then(function(){return self.snapshot(scope,true)});stream.cached=null;}if(stream.cached&&Date.now()-stream.cached.ts<2000)return Promise.resolve(stream.cached);if(stream.pending)return stream.pending;
 var withStorage=!this.storage||Date.now()-this.storageAt>=30000,cmd=LIGHT+(scope==='full'?'; '+DETAILS:'')+(withStorage?'; '+STORAGE:'');
-stream.pending=this.execute(cmd,15000).then(function(r){if(r.exit_code||r.timed_out)throw Error('snapshot unavailable');var result=parse(r.stdout,stream.previous,Date.now());if(!result.sample.cpu.cpu||!result.data.memory.totalBytes||(scope==='full'&&!result.data.processCount))throw Error('incomplete system snapshot');
+stream.pending=this.execute(cmd,15000).then(function(r){if(r.exit_code||r.timed_out)throw execError.failed(r,'snapshot unavailable');var result=parse(r.stdout,stream.previous,Date.now());if(!result.sample.cpu.cpu||!result.data.memory.totalBytes||(scope==='full'&&!result.data.processCount))throw execError.coded('incomplete','incomplete system snapshot');
  if(withStorage&&result.data.storage){self.storage=result.data.storage;self.storageAt=result.data.ts;}if(result.data.bootId&&self.storageBoot&&self.storageBoot!==result.data.bootId&&!withStorage){self.storage=null;self.storageAt=0;}self.storageBoot=result.data.bootId;
  result.data.storage=self.storage;result.data.storageTs=self.storage?self.storageAt:null;result.data.scope=scope;
  if(scope==='summary'){delete result.data.processes;delete result.data.processCount;}
  stream.previous=result.sample;stream.cached=result.data;return result.data;
 }).finally(function(){stream.pending=null;});return stream.pending;};
-Monitor.prototype.startup=function(){var self=this;if(this.units&&Date.now()-this.unitsAt<60000)return Promise.resolve(this.units);if(this.unitsPending)return this.unitsPending;this.unitsPending=this.execute(UNITS,15000).then(function(r){if(r.exit_code||r.timed_out)throw Error('service inventory unavailable');self.units=parseUnits(r.stdout);self.unitsAt=Date.now();return self.units;}).finally(function(){self.unitsPending=null;});return this.unitsPending;};
+Monitor.prototype.startup=function(){var self=this;if(this.units&&Date.now()-this.unitsAt<60000)return Promise.resolve(this.units);if(this.unitsPending)return this.unitsPending;this.unitsPending=this.execute(UNITS,15000).then(function(r){if(r.exit_code||r.timed_out)throw execError.failed(r,'service inventory unavailable');self.units=parseUnits(r.stdout);self.unitsAt=Date.now();return self.units;}).finally(function(){self.unitsPending=null;});return this.unitsPending;};
 module.exports={Monitor:Monitor,parse:parse,processStat:processStat,parseUnits:parseUnits};

@@ -1,4 +1,5 @@
 'use strict';
+var execError = require('./exec-error.js');
 
 // Privacy dashboard data: aggregates the TV's privacy/consent state that is
 // readable without a web runtime. Values come from vconf (Buxton2) and the
@@ -9,7 +10,7 @@
 var HDC = '/opt/usr/apps/org.tizen.homedatacontrol-service/data/data.db';
 
 function wrap(script) { return 'echo ' + Buffer.from(script).toString('base64') + ' | base64 -d | sh'; }
-function check(r) { if (r.exit_code || r.timed_out) throw Error(r.stderr || r.stdout || 'Privacy state unavailable'); return r.stdout || ''; }
+function check(r) { if (r.exit_code || r.timed_out) throw execError.failed(r, r.stderr || r.stdout || 'Privacy state unavailable'); return r.stdout || ''; }
 function sections(text) {
     var out = {}, key = null;
     String(text || '').split('\n').forEach(function (l) {

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Diagnostic export:** sections that fail now carry a fixed-list `reason` and, for failed commands, the numeric exit code, so a missing section such as `startup` can be diagnosed from the file. Startup listing now tells a command timeout from a command failure.
+- **Diagnostic export:** model, firmware and API probe are labelled as widget-reported with their age; settings write paths are reported as `implemented` instead of `verified`; the monitor takes two samples so CPU rates are filled in; the temperature is searched across all thermal zones; kernel threads are counted instead of listed; the dead `runtimeAvailability` field and idle Wi-Fi services are no longer exported; `anynet+(hdmicec)`-style menu ids are kept; `sourceDirty` records whether the package matched its revision.
+- `POST /probe` is accepted only from the TV itself. Other write routes are unchanged.
+- **Community report analysis:** structured reports no longer match text error signatures, and the review names the sections that were not collected and why.
+- **Compatibility:** first community diagnostic report from a second model, a Samsung Q67B (QE43Q67BAUXXH, firmware T-NKLBDEUC-1720.7), on Vetro 0.2.3. The app and service were running, the authenticated root agent was connected with UID 0, and 32 components were disabled through the registry. Not confirmed: cold-boot persistence and the system service listing, which was unavailable in that report.
 - **Quick settings** is the first panel: switches for HbbTV, ACR viewing data, domain blocking, Alexa, Google Assistant, Bixby and voice services, with in-page confirmation for voice switches (the remote microphone button stops working). Groups apply the disabled flag to every installed member in one step, verify it in the registry, roll back on failure and stop members still running.
 - **Install leftovers** cleanup ported from Apps2Samsung (MIT): package files in the install staging folder, deleted one at a time, with bytes freed and storage before and after. Refused while an installation is running.
 - **App catalog** from the firmware manifests: area, role and purpose for each package; references from other packages, event and key-sequence launches and microphone/camera/location access in the component drawer. `app/scripts/build-app-catalog.py` regenerates `service/app-facts.js` from a private dump.

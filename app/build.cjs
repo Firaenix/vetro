@@ -12,6 +12,10 @@ function collectFiles() {
         try { revision = require('child_process').execFileSync('git', ['rev-parse', 'HEAD'], {cwd: __dirname, stdio: ['ignore','pipe','ignore']}).toString().trim(); } catch (_) {}
     }
     if (revision && /^[a-f0-9]{40}$/.test(revision)) metadata.sourceRevision = revision;
+    // A revision alone does not show that the package matches it. Unknown when the revision is supplied from outside.
+    if (!process.env.VETRO_SOURCE_REVISION && metadata.sourceRevision) {
+        try { metadata.sourceDirty = require('child_process').execFileSync('git', ['status', '--porcelain', '--', '.', '../rooting'], {cwd: __dirname, stdio: ['ignore','pipe','ignore']}).toString().trim() !== ''; } catch (_) {}
+    }
     return names.map(name => ({uri: encodeURIComponent(name), data: name === 'service/build-info.js'
         ? Buffer.from("'use strict';\nmodule.exports = " + JSON.stringify(metadata) + ';\n')
         : fs.readFileSync(path.join(__dirname,name))}));

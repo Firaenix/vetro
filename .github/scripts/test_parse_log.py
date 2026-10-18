@@ -41,6 +41,32 @@ class ParserTests(unittest.TestCase):
     def test_bad_section_shapes(self):
         p.analyze(json.dumps({'format':'vetro-diagnostics','schemaVersion':1,'sections':{'monitor':[],'probe':{'status':'ok','data':[]}}}))
 
+    def test_structured_report_status_words_are_not_signatures(self):
+        text = json.dumps({'format':'vetro-diagnostics','schemaVersion':1,'sections':{'startup':{'status':'timeout','reason':'report-deadline'}}})
+        r = p.analyze(text)
+        self.assertEqual(r['signatures'],[])
+        self.assertIn('startup (timeout: report deadline reached)',p.markdown(r))
+
+    def test_missing_sections_use_allowlists(self):
+        secret = 'SECRET@example.com'
+        text = json.dumps({'format':'vetro-diagnostics','schemaVersion':1,'sections':{
+            secret:{'status':'unavailable'},
+            'startup':{'status':secret,'reason':secret,'exitCode':127},
+            'network':{'status':'unavailable','reason':'command-failed','exitCode':secret}}})
+        s = p.markdown(p.analyze(text))
+        self.assertNotIn(secret,s)
+        self.assertIn('startup (unavailable: reason not recorded, exit code 127)',s)
+        self.assertIn('network (unavailable: command failed)',s)
+        self.assertIn('plus 1 unrecognised',s)
+
+    def test_provenance_and_revision_rows(self):
+        text = json.dumps({'format':'vetro-diagnostics','schemaVersion':1,'sourceRevision':'a'*40,'sourceDirty':True,'sections':{
+            'device':{'status':'ok','data':{'model':'M','source':'widget-probe','probeAgeMinutes':120}}}})
+        s = p.markdown(p.analyze(text))
+        self.assertIn('last probe about 120 min before export',s)
+        self.assertIn('aaaaaaa (build differed from it)',s)
+        self.assertNotIn('a'*40,s)
+
     def test_legacy_signatures(self):
         r = p.analyze('uid=0 ECONNREFUSED EACCES SIGSEGV secret-password')
         self.assertEqual(len(r['signatures']),3)

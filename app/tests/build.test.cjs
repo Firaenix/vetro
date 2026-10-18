@@ -6,7 +6,7 @@ const files = build.collectFiles(); const names = files.map(file => decodeURICom
 assert.ok(names.includes('service/platform.js'));
 assert.deepEqual(names.slice().sort(), [
     'config.xml', 'icon.png', 'index.html', 'native/TvState.dll', 'native/TvState.runtimeconfig.json', 'service/tv-state.js',
-    'service/build-info.js', 'service/app-catalog.js', 'service/app-facts.js', 'service/app-groups.js','service/app-registry.js', 'service/dashboard.js', 'service/physical-input.js', 'service/presence.js', 'service/apps.js', 'service/component-actions.js','service/control.js',     'service/debloat.js', 'service/diagnostic-report.js', 'service/hbbtv.js','service/home-order.js','service/local-dns.js','service/menu-settings.js','service/main.js',
+    'service/build-info.js', 'service/exec-error.js', 'service/app-catalog.js', 'service/app-facts.js', 'service/app-groups.js','service/app-registry.js', 'service/dashboard.js', 'service/physical-input.js', 'service/presence.js', 'service/apps.js', 'service/component-actions.js','service/control.js',     'service/debloat.js', 'service/diagnostic-report.js', 'service/hbbtv.js','service/home-order.js','service/local-dns.js','service/menu-settings.js','service/main.js',
     'service/mqtt-bridge.js', 'service/mqtt.js', 'service/package-info.js',
     'service/platform.js', 'service/privacy.js', 'service/probe.js', 'service/quick-settings.js', 'service/leftovers.js', 'service/remap.js',
     'service/samsung-remote.js', 'service/settings.js', 'service/system-monitor.js','service/tv-settings.js'
@@ -16,6 +16,7 @@ const context = {module: {exports: {}}};
 require('vm').runInNewContext(metadata, context);
 assert.equal(context.module.exports.version, require('../package.json').version);
 assert.ok(context.module.exports.sourceRevision === null || /^[a-f0-9]{40}$/.test(context.module.exports.sourceRevision));
+assert.ok(context.module.exports.sourceDirty === null || typeof context.module.exports.sourceDirty === 'boolean');
 const platform = files.find(file => decodeURIComponent(file.uri) === 'service/platform.js').data.toString();
 assert.ok(platform.includes('app-only'));
 info.fromBuffer(build.zip(files)).then(result => {

@@ -77,7 +77,13 @@ function readTelemetry() {
         out.cpu_percpu = null;
     }
 
-    var temp = tryRead('/sys/class/thermal/thermal_zone0/temp') || tryRead('/sys/devices/virtual/thermal/thermal_zone0/temp');
+    var temp = null;
+    ['/sys/class/thermal', '/sys/devices/virtual/thermal'].forEach(function (dir) {
+        if (temp) return;
+        var zones = [];
+        try { zones = fs.readdirSync(dir).filter(function (n) { return /^thermal_zone\d+$/.test(n); }).sort(); } catch (e) { zones = []; }
+        zones.forEach(function (zone) { if (!temp) temp = tryRead(dir + '/' + zone + '/temp'); });
+    });
     if (temp) { var t = parseInt(temp, 10); out.soctemp_c = (t > 1000) ? (t / 1000) : t; }
     else out.soctemp_c = null;
 
@@ -103,11 +109,11 @@ var diagnosticPending = null;
 function downloadDiagnostics(res) {
     if (!diagnosticPending) diagnosticPending = require('./diagnostic-report.js').collect({
         platform: function () { return platform.status(); },
-        device: function () { return state.settings || {}; },
+        device: function () { return Object.assign({}, state.settings || {}, {receivedAt: state.receivedAt}); },
         inventory: function () { return inventory(false); },
         settings: function () { return tvSettings.read(); },
         catalog: function () { return menuSettings.load(); },
-        monitor: function () { return monitor.snapshot('full').then(function(d){return Object.assign({},d,{telemetry:readTelemetry()});}); },
+        monitor: function () { return require('./diagnostic-report.js').twoSamples(function (force) { return monitor.snapshot('full', force); }, 1500, 16000).then(function(d){return Object.assign({},d,{telemetry:readTelemetry()});}); },
         startup: function () { return monitor.startup(); },
         network: function () { return tvSettings.readNetwork(); },
         dns: function () { return dnsFilter.status(); },
@@ -345,6 +351,11 @@ function handleProbe(req, res) {
             return serveJson(res, {report: state, service: serviceApiProbe()});
         }
         return serveJson(res, state);
+    }
+    // The widget posts from the TV itself. This keeps LAN clients from rewriting the
+    // stored model, firmware and API probe that diagnostics report.
+    if (['127.0.0.1', '::1', '::ffff:127.0.0.1'].indexOf(req.socket && req.socket.remoteAddress) < 0) {
+        return serveJson(res, { error: 'Probe reports are accepted from the TV only' }, 403);
     }
     readJsonBody(req, res, function (parsed) {
         try { state = probe.sanitize(parsed); }

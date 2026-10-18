@@ -224,7 +224,9 @@ function persist() {
 
 function agentExecute(cmd, timeoutMs) {
     if (!agentServer || !agentConnected) {
-        return Promise.reject(new Error('no root agent connected'));
+        var missing = new Error('no root agent connected');
+        missing.code = 'no-root-agent';
+        return Promise.reject(missing);
     }
     return agentServer.execute(cmd, timeoutMs || 30000);
 }
