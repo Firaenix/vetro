@@ -34,6 +34,14 @@ class ParserTests(unittest.TestCase):
         s = p.markdown(p.analyze(self.report(platform={'rootAgent':{'connected':True,'uid':False}})))
         self.assertNotIn('with UID 0',s)
 
+    def test_firmware_derived_controls_report_the_tv_check(self):
+        items = [{'id':'blurReduction','writable':True,'access':'firmware','probe':'confirmed','available':True},
+                 {'id':'hdmiBlackLevel','writable':False,'access':'firmware','probe':'missing','available':True},
+                 {'id':'x','writable':False,'access':'firmware','probe':'<script>','available':True}]
+        s = p.markdown(p.analyze(self.report(settings={'items':items,'api':{'status':'ok','methods':223}})))
+        self.assertIn('1 confirmed, 1 missing, 1 unchecked (223 picture API methods exposed)',s)
+        self.assertNotIn('<script>',s)
+
     def test_invalid_schemas(self):
         for value in ['{}','[]','{"format":"vetro-diagnostics","schemaVersion":2}', '{bad']:
             with self.assertRaises(ValueError):p.analyze(value)

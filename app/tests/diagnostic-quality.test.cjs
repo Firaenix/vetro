@@ -28,7 +28,7 @@ const execError = require('../service/exec-error');
   const full = await report.collect({
     device: () => ({model: 'M', firmware: 'F', receivedAt: now - 7200}),
     probe: () => ({probe: {}, receivedAt: now}),
-    settings: () => ({items: [{id: 'backlight', value: 3, writable: true, access: 'verified'}]}),
+    settings: () => ({items: [{id: 'backlight', value: 3, writable: true, access: 'verified'}, {id: 'blurReduction', value: 2, writable: true, access: 'firmware', probe: 'confirmed', readOnlyReason: 'secret text'}], api: {status: 'ok', methods: 223, raw: 'x'}}),
     catalog: () => ({items: [{id: 'anynet+(hdmicec)', group: null, runtimeAvailability: 'x', readable: true}, {id: 'http://x.test/a'}]}),
     monitor: () => ({processes: [{name: 'kworker/0:1', kernel: true, rssBytes: 0}, {name: 'tv-viewer', kernel: false, rssBytes: 5}], telemetry: {}}),
     network: () => ({services: [{type: 'wifi', state: 'idle', autoConnect: false}, {type: 'wifi', state: 'ready', autoConnect: true}]})
@@ -37,6 +37,8 @@ const execError = require('../service/exec-error');
   assert.equal(full.sections.device.data.probeAgeMinutes, 120);
   assert.equal(full.sections.probe.data.probeAgeMinutes, 0);
   assert.equal(full.sections.settings.data.items[0].access, 'implemented');
+  assert.deepEqual(full.sections.settings.data.items[1], {id: 'blurReduction', value: 2, writable: true, access: 'firmware', probe: 'confirmed', available: true});
+  assert.deepEqual(full.sections.settings.data.api, {status: 'ok', methods: 223});
   assert.equal(full.sections.catalog.data.items[0].id, 'anynet+(hdmicec)');
   assert.equal(full.sections.catalog.data.items[1].id, null);
   assert(!('runtimeAvailability' in full.sections.catalog.data.items[0]));

@@ -105,6 +105,16 @@ def analyze(text):
         controls = data('settings').get('items')
         if isinstance(controls, list):
             findings.append(('TV controls with a write path in Vetro', str(sum(isinstance(x, dict) and x.get('writable') is True and x.get('available') is True for x in controls)) + ' (not written or tested on this TV by the export)'))
+        if isinstance(controls, list):
+            api = data('settings').get('api')
+            gated = [x for x in controls if isinstance(x, dict) and (x.get('access') == 'firmware' or x.get('probe') is not None)]
+            if gated:
+                states = {}
+                for x in gated:
+                    state = x.get('probe') if x.get('probe') in ('confirmed', 'missing', 'signature-mismatch') else 'unchecked'
+                    states[state] = states.get(state, 0) + 1
+                methods = api.get('methods') if isinstance(api, dict) and type(api.get('methods')) is int and 0 <= api['methods'] <= 5000 else None
+                findings.append(('Controls checked against the TV method list', ', '.join(f'{n} {s}' for s, n in sorted(states.items())) + (f' ({methods} picture API methods exposed)' if methods is not None else '')))
         memory = data('monitor').get('memory', {})
         ram = memory.get('availableBytes') if isinstance(memory, dict) else None
         if type(ram) in (int, float) and 0 <= ram <= 2**50:
