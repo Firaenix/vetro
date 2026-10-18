@@ -7,20 +7,10 @@
 var debloat = require('./debloat.js');
 var catalog = require('./app-catalog.js');
 
-// Domains commonly reported for Samsung TV ads/ACR telemetry. To be reviewed
-// before use: served by GET /blocklist for an external DNS blocker (Pi-hole,
-// router) and offered as suggestions by the local filter, which applies only
-// the domains the owner saves (local-dns.js).
-var BLOCKLIST_DOMAINS = [
-    'samsungads.com',
-    'config.samsungads.com',
-    'ads.samsung.com',
-    'samsungacr.com',
-    'log-config.samsungacr.com',
-    'log-ingestion.samsungacr.com',
-    'samsungcloudsolution.com',
-    'acr0.samsungcloudsolution.com'
-];
+// Candidate domains, grouped by evidence in service/blocklist.js. Served by
+// GET /blocklist for an external DNS blocker (Pi-hole, router) and offered as
+// suggestions by the local filter, which applies only what the owner saves.
+var BLOCKLIST_DOMAINS = require('./blocklist.js').all();
 
 function str(v, max) { return typeof v === 'string' ? v.slice(0, max || 200) : null; }
 function num(v) { return typeof v === 'number' && isFinite(v) ? v : null; }
