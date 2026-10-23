@@ -10,6 +10,9 @@
 var BASE = 'http://127.0.0.1:8099';
 var report = {probe: {}, apps: [], packages: [], settings: {}};
 var out = document.getElementById('out');
+var delivered = false;
+// The service keeps running without this page; a resident page only holds memory.
+function leave() { try { tizen.application.getCurrentApplication().exit(); } catch (e) {} }
 function log(line) { out.textContent += '\n' + line; }
 function attempt(name, fn) {
   return new Promise(function (resolve) {
@@ -45,6 +48,7 @@ function tryConnect(port) {
     ws.onerror = function () { clearTimeout(t); reject(new Error('refused')); };
   });
 }
+document.addEventListener('visibilitychange', function () { if (document.hidden && delivered) leave(); });
 var jobs = [
   ['tizenObject', function () { return typeof tizen !== 'undefined'; }],
   ['webapisObject', function () { return typeof webapis !== 'undefined'; }],
@@ -69,8 +73,11 @@ var jobs = [
 jobs.reduce(function (p, j) { return p.then(function () { return attempt(j[0], j[1]); }); }, Promise.resolve())
   .then(function () {
     return sendReport();
-  }).then(function (r) { log('\nReport sent to service: ' + r.status + (r.persisted ? ' · saved' : ' · memory only')); },
-    function (e) { log('\nService unreachable: ' + e); });
+  }).then(function (r) {
+    delivered = true;
+    log('\nReport sent to service: ' + r.status + (r.persisted ? ' · saved' : ' · memory only') + '\nClosing in 5 s; the service keeps running.');
+    setTimeout(leave, 5000);
+  }, function (e) { log('\nService unreachable: ' + e); });
 </script>
 </body>
 </html>
