@@ -66,6 +66,15 @@ namespace Launcher.Native
         [DllImport(Evas)] public static extern void evas_object_image_border_center_fill_set(IntPtr img, int mode);
         [DllImport(Evas)] public static extern void evas_object_image_smooth_scale_set(IntPtr img, [MarshalAs(UnmanagedType.U1)] bool smooth);
         [DllImport(Evas)] public static extern void evas_object_image_scale_hint_set(IntPtr img, int hint);
+        // --- evas: raw pixels (EFL keeps them as premultiplied ARGB, one 32-bit word per pixel) ---
+        [DllImport(Evas)] public static extern void evas_object_image_size_get(IntPtr img, out int w, out int h);
+        [DllImport(Evas)] public static extern void evas_object_image_size_set(IntPtr img, int w, int h);
+        [DllImport(Evas)] public static extern int evas_object_image_stride_get(IntPtr img);
+        [DllImport(Evas)] public static extern IntPtr evas_object_image_data_get(IntPtr img, [MarshalAs(UnmanagedType.U1)] bool forWriting);
+        [DllImport(Evas)] public static extern void evas_object_image_data_set(IntPtr img, IntPtr data);
+        [DllImport(Evas)] public static extern void evas_object_image_data_update_add(IntPtr img, int x, int y, int w, int h);
+        [DllImport(Evas)] public static extern void evas_object_image_alpha_set(IntPtr img, [MarshalAs(UnmanagedType.U1)] bool alpha);
+        [DllImport(Evas)] [return: MarshalAs(UnmanagedType.U1)] public static extern bool evas_object_image_save(IntPtr img, string file, string key, string flags);
 
         // --- evas: text ---
         [DllImport(Evas)] public static extern IntPtr evas_object_text_add(IntPtr evas);

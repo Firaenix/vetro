@@ -215,8 +215,9 @@ namespace Launcher.Ui
         {
             AppEntry e = _items[idx];
             IntPtr img = Efl.evas_object_image_add(_evas);
-            Efl.evas_object_image_file_set(img, Path.Combine(_assets, "icons", e.Slug + ".png"), null);
-            if (Efl.evas_object_image_load_error_get(img) != Efl.EvasLoadErrorNone)
+            bool fromRegistry = e.IconPath != null && LoadRegistryIcon(img, e);
+            if (!fromRegistry) Efl.evas_object_image_file_set(img, Path.Combine(_assets, "icons", e.Slug + ".png"), null);
+            if (!fromRegistry && Efl.evas_object_image_load_error_get(img) != Efl.EvasLoadErrorNone)
             {
                 // No icon on disk: a plain glass tile with the app's initials keeps the entry usable.
                 MissingIcons++;
@@ -234,6 +235,65 @@ namespace Launcher.Ui
             Efl.evas_object_show(img);
             return img;
         }
+
+        /// <summary>
+        /// Loads the app's own icon from Samsung's registry and finishes it (<see cref="IconPrep"/>):
+        /// rounded corners, a dark tile behind loose logos. Returns false, with the image object left
+        /// unspecified, when anything fails, and the caller falls back to the pre-made icon.
+        /// </summary>
+        private bool LoadRegistryIcon(IntPtr img, AppEntry e)
+        {
+            try
+            {
+                Efl.evas_object_image_file_set(img, e.IconPath, null);
+                if (Efl.evas_object_image_load_error_get(img) != Efl.EvasLoadErrorNone) { _log("registry icon not loadable: " + e.Slug); return false; }
+                int w, h;
+                Efl.evas_object_image_size_get(img, out w, out h);
+                if (w <= 0 || h <= 0 || w > 1024 || h > 1024) { _log("registry icon has odd size " + w + "x" + h + ": " + e.Slug); return false; }
+                IntPtr data = Efl.evas_object_image_data_get(img, false);
+                if (data == IntPtr.Zero) { _log("registry icon has no pixels: " + e.Slug); return false; }
+                uint[] src = ReadPixels(data, Efl.evas_object_image_stride_get(img), w, h);
+                uint[] done = IconPrep.Prepare(src, w, h);
+                int side = IconPrep.SideFor(w, h);
+                Efl.evas_object_image_alpha_set(img, true);
+                Efl.evas_object_image_size_set(img, side, side);
+                IntPtr dst = Efl.evas_object_image_data_get(img, true);
+                if (dst == IntPtr.Zero) { _log("registry icon: no write buffer: " + e.Slug); return false; }
+                WritePixels(dst, Efl.evas_object_image_stride_get(img), done, side);
+                Efl.evas_object_image_data_set(img, dst);
+                Efl.evas_object_image_data_update_add(img, 0, 0, side, side);
+                if (DumpIconsTo != null) _log("dump " + e.Slug + ": " + (Efl.evas_object_image_save(img, Path.Combine(DumpIconsTo, e.Slug + ".png"), null, "compress=5") ? "ok" : "failed"));
+                return true;
+            }
+            catch (Exception ex) { _log("registry icon error (" + e.Slug + "): " + ex.Message); return false; }
+        }
+
+        private static uint[] ReadPixels(IntPtr data, int stride, int w, int h)
+        {
+            var px = new uint[w * h];
+            var row = new int[w];
+            if (stride < w * 4) stride = w * 4;
+            for (int y = 0; y < h; y++)
+            {
+                System.Runtime.InteropServices.Marshal.Copy(IntPtr.Add(data, y * stride), row, 0, w);
+                Buffer.BlockCopy(row, 0, px, y * w * 4, w * 4);
+            }
+            return px;
+        }
+
+        private static void WritePixels(IntPtr data, int stride, uint[] px, int side)
+        {
+            var row = new int[side];
+            if (stride < side * 4) stride = side * 4;
+            for (int y = 0; y < side; y++)
+            {
+                Buffer.BlockCopy(px, y * side * 4, row, 0, side * 4);
+                System.Runtime.InteropServices.Marshal.Copy(row, 0, IntPtr.Add(data, y * stride), side);
+            }
+        }
+
+        /// <summary>Debug: a directory to save every finished registry icon into, to look at them on a desktop.</summary>
+        public static string DumpIconsTo;
 
         public static string Initials(string name)
         {

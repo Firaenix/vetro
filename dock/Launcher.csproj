@@ -15,13 +15,10 @@
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Remove="tests/**;old/**;bin/**;obj/**" />
+    <Compile Remove="tests/**;bin/**;obj/**" />
   </ItemGroup>
   <ItemGroup>
-    <!-- Glass assets shared with tools/make-glass.cjs, then the generated apps.tsv and icons. -->
-    <None Include="../res/shadow.png;../res/dock_bg.png;../res/glass_tile.png;../res/dock_glow.png;../res/chev_up.png;../res/chev_down.png"
-          Link="res/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Glass images and the generic Source/Settings/HDMI icons. The app list and the apps' own icons come from the TV at run time. -->
     <None Include="res/**" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="run.sh" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

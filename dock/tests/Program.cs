@@ -800,6 +800,67 @@ namespace Launcher.Tests
                 T.Eq(Catalog.GroupStart(Catalog.Parse("a\tA\tx.a\nsource\tSource\tpanel:inputs\nsettings\tSettings\tkey:XF86Menu\torg.tizen.menu\n").Entries), 1, "parsed catalog");
             });
 
+            T.Run("catalog: an optional fifth column names the app's own icon", () =>
+            {
+                string ok = "/opt/share/webappservice/apps_icon/all/111399002034/224x224.png";
+                var r = Catalog.Parse("a\tA\tx.a\t\t" + ok + "\nb\tB\tx.b\n");
+                T.Eq(r.Entries.Length, 2, "both parsed");
+                T.Eq(r.Entries[0].IconPath, ok, "icon path kept");
+                T.Eq(r.Entries[0].FallbackAppId, null, "empty fallback column stays empty");
+                T.Eq(r.Entries[1].IconPath, null, "no icon column: the pre-made icon");
+                T.True(Catalog.ValidIconPath("/opt/usr/apps/pkg/shared/res/icon.png"), "package icon accepted");
+                T.True(Catalog.ValidIconPath("/usr/apps/com.samsung.x/shared/res/a-b_c.png"), "system package icon accepted");
+                T.True(!Catalog.ValidIconPath("/etc/passwd"), "outside the icon places");
+                T.True(!Catalog.ValidIconPath("/opt/usr/apps/../../etc/x.png"), "no parent directories");
+                T.True(!Catalog.ValidIconPath("/opt/usr/apps/a b.png"), "no spaces");
+                T.True(!Catalog.ValidIconPath("/opt/usr/apps/a.jpg"), "png only");
+                T.True(!Catalog.ValidIconPath("/opt/usr/apps//a.png"), "no empty path part");
+                var bad = Catalog.Parse("a\tA\tx.a\t\t/etc/shadow.png\n");
+                T.Eq(bad.Entries.Length, 0, "a bad icon path drops the line");
+                T.Eq(bad.Problems.Length, 1, "and reports it");
+                var key = Catalog.Parse("settings\tSettings\tkey:XF86Menu\torg.tizen.menu\t/usr/apps/a/b.png\n");
+                T.Eq(key.Entries[0].IconPath, "/usr/apps/a/b.png", "the column works after a key entry too");
+            });
+
+            T.Run("icons: rounded corners, and loose logos go on a tile", () =>
+            {
+                // A fully opaque square tile: only the four corners may change.
+                int s = 128;
+                var solid = new uint[s * s];
+                for (int i = 0; i < solid.Length; i++) solid[i] = 0xFF2080FFu;
+                var done = IconPrep.Prepare(solid, s, s);
+                T.Eq(done.Length, s * s, "same size out");
+                T.Eq(done[0] >> 24, 0u, "the very corner is transparent");
+                T.Eq(done[s / 2 * s + s / 2], 0xFF2080FFu, "the middle is untouched");
+                T.Eq(done[s / 2], 0xFF2080FFu, "the middle of an edge is untouched");
+                int r = IconPrep.Corner(s);
+                T.Eq(r, 29, "radius at 128 is 29");
+                T.Eq(done[r * s + 0] >> 24, 255u, "below the corner arc the edge is opaque");
+                // A transparent canvas with a small opaque square: a loose logo.
+                var loose = new uint[s * s];
+                for (int y = 40; y < 88; y++) for (int x = 40; x < 88; x++) loose[y * s + x] = 0xFFFFFFFFu;
+                T.True(IconPrep.Coverage(loose) < IconPrep.LooseCoverage, "coverage says loose");
+                var tiled = IconPrep.Prepare(loose, s, s);
+                T.Eq(tiled[s / 2 * s + 6] >> 24, 255u, "the tile fills what the logo left empty");
+                T.Eq(tiled[0] >> 24, 0u, "tile corners are rounded too");
+                uint centre = tiled[s / 2 * s + s / 2];
+                T.True(((centre >> 16) & 0xFF) > 200, "the logo sits in the middle, still light");
+                T.True(((tiled[s / 2 * s + 6] >> 16) & 0xFF) < 100, "and the tile around it is dark");
+                // Not square: never cropped, always ends square.
+                var wide = new uint[200 * 100];
+                for (int i = 0; i < wide.Length; i++) wide[i] = 0xFFFF0000u;
+                var sq = IconPrep.Prepare(wide, 200, 100);
+                T.Eq(sq.Length, 200 * 200, "a wide icon becomes a square of its longer side");
+                T.Eq(IconPrep.SideFor(1000, 900), IconPrep.MaxSide, "huge icons are capped");
+                T.Eq(IconPrep.SideFor(8, 8), IconPrep.MinSide, "tiny icons are raised to a minimum");
+                var big = new uint[304 * 304];
+                for (int i = 0; i < big.Length; i++) big[i] = 0xFF00FF00u;
+                T.Eq(IconPrep.Prepare(big, 304, 304).Length, IconPrep.MaxSide * IconPrep.MaxSide, "a 304 px icon is scaled down to the cap");
+                bool threw = false;
+                try { IconPrep.Prepare(new uint[3], 10, 10); } catch (ArgumentException) { threw = true; }
+                T.True(threw, "a buffer smaller than the size is refused");
+            });
+
             T.Run("hot paths allocate nothing (animation frame, keys, evdev read)", () =>
             {
                 var layout = new DockLayout(13, 1920, 1080, 0, false, 11);
