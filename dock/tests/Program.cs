@@ -851,6 +851,19 @@ namespace Launcher.Tests
                 for (int i = 0; i < wide.Length; i++) wide[i] = 0xFFFF0000u;
                 var sq = IconPrep.Prepare(wide, 200, 100);
                 T.Eq(sq.Length, 200 * 200, "a wide icon becomes a square of its longer side");
+                T.Eq(sq[100 * 200 + 100], 0xFFFF0000u, "the whole picture sits in the middle");
+                T.Eq(sq[5 * 200 + 100] >> 24, 255u, "the blurred fill covers the band above it (no transparent bars)");
+                T.Eq(sq[0] >> 24, 0u, "and the corners are rounded");
+                // A banner as big as the screen: brought down, then treated the same way.
+                var banner = new uint[1920 * 1080];
+                for (int i = 0; i < banner.Length; i++) banner[i] = (i / 1920) < 540 ? 0xFF40C0FFu : 0xFFC0E0FFu;
+                var bi = IconPrep.Prepare(banner, 1920, 1080);
+                T.Eq(bi.Length, IconPrep.MaxSide * IconPrep.MaxSide, "a 1920x1080 banner ends as a 256 px square");
+                T.Eq(bi[(IconPrep.MaxSide / 2) * IconPrep.MaxSide + IconPrep.MaxSide / 2] >> 24, 255u, "opaque in the middle");
+                var half = IconPrep.Halve(new uint[] { 0xFF000000u, 0xFF0000FFu, 0xFF00FF00u, 0xFFFFFFFFu }, 2, 2);
+                T.Eq(half.Length, 1, "halving 2x2 gives one pixel");
+                T.Eq(half[0] >> 24, 255u, "alpha stays opaque");
+                T.Eq(IconPrep.Halve(new uint[3 * 3], 3, 3).Length, 4, "odd sizes round up");
                 T.Eq(IconPrep.SideFor(1000, 900), IconPrep.MaxSide, "huge icons are capped");
                 T.Eq(IconPrep.SideFor(8, 8), IconPrep.MinSide, "tiny icons are raised to a minimum");
                 var big = new uint[304 * 304];

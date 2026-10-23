@@ -120,6 +120,23 @@ function tsv(built) {
     return lines.concat(SYSTEM_ROWS).join('\n') + '\n';
 }
 
+// The registry can point at an icon that is no longer there (TV Plus does). One more read-only
+// call keeps only the paths that exist; if it fails the paths stay and the dock copes with them.
+function existing(execute, built) {
+    var paths = built.entries.map(function (e) { return e.icon; }).filter(Boolean);
+    if (!paths.length) return Promise.resolve(built);
+    var script = 'for p in ' + paths.map(function (p) { return "'" + p + "'"; }).join(' ') + '; do [ -f "$p" ] && echo "OK|$p"; done; true';
+    return execute(wrap(script), 10000).then(function (r) {
+        if (r.exit_code || r.timed_out) return built;
+        var ok = {};
+        String(r.stdout || '').split('\n').forEach(function (l) { if (l.indexOf('OK|') === 0) ok[l.slice(3).trim()] = true; });
+        built.entries.forEach(function (e) {
+            if (e.icon && !ok[e.icon]) { built.skipped.push({item: e.slug, reason: 'Icon file missing; a generic icon is used'}); e.icon = null; }
+        });
+        return built;
+    }, function () { return built; });
+}
+
 // Reads the TV and returns {tsv, count, skipped}. Throws when the Home row cannot be read at all,
 // because a dock with no apps is worse than none.
 function load(execute) {
@@ -129,7 +146,9 @@ function load(execute) {
         if (!parsed.order.length) throw new Error('The Home row is empty or unreadable');
         var built = build(parsed);
         if (!built.entries.length) throw new Error('None of the Home row apps could be matched in the registry');
-        return {tsv: tsv(built), count: built.entries.length, skipped: built.skipped};
+        return existing(execute, built).then(function (b) {
+            return {tsv: tsv(b), count: b.entries.length, skipped: b.skipped};
+        });
     });
 }
 

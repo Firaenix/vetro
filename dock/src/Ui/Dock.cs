@@ -249,7 +249,7 @@ namespace Launcher.Ui
                 if (Efl.evas_object_image_load_error_get(img) != Efl.EvasLoadErrorNone) { _log("registry icon not loadable: " + e.Slug); return false; }
                 int w, h;
                 Efl.evas_object_image_size_get(img, out w, out h);
-                if (w <= 0 || h <= 0 || w > 1024 || h > 1024) { _log("registry icon has odd size " + w + "x" + h + ": " + e.Slug); return false; }
+                if (w <= 0 || h <= 0 || w > 2048 || h > 2048) { _log("registry icon has odd size " + w + "x" + h + ": " + e.Slug); return false; }
                 IntPtr data = Efl.evas_object_image_data_get(img, false);
                 if (data == IntPtr.Zero) { _log("registry icon has no pixels: " + e.Slug); return false; }
                 uint[] src = ReadPixels(data, Efl.evas_object_image_stride_get(img), w, h);

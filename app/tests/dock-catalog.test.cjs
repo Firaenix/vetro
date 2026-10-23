@@ -64,15 +64,33 @@ const capped = catalog.build(many);
 assert.equal(capped.entries.length, 38);
 assert.equal(capped.skipped.length, 22);
 
-// load(): one shell call, errors are explicit
+// load(): one read of the Home data, one check that the icon files exist; errors are explicit
 (async function () {
-    let seen = null;
-    const ok = await catalog.load(async cmd => { seen = cmd; return {exit_code: 0, stdout: OUTPUT}; });
+    const missing = '/opt/usr/apps/com.samsung.tv.tvplus/shared/res/tvplus.png';
+    const run = (home, exists) => async cmd => {
+        const script = Buffer.from(cmd.split(' ')[1], 'base64').toString();
+        seen.push(script);
+        if (script.includes('.appLayerCache')) return home;
+        const out = (script.match(/'[^']+'/g) || []).map(p => p.slice(1, -1)).filter(exists).map(p => 'OK|' + p).join('\n');
+        return {exit_code: 0, stdout: out};
+    };
+    const seen = [];
+    const ok = await catalog.load(run({exit_code: 0, stdout: OUTPUT}, p => p !== missing));
     assert.equal(ok.count, 5);
-    assert.ok(/^echo [A-Za-z0-9+\/=]+ \| base64 -d \| sh$/.test(seen), 'script goes through base64 like the other modules');
-    const script = Buffer.from(seen.split(' ')[1], 'base64').toString();
-    assert.ok(script.includes('.appLayerCache.1') && script.includes('.webappservice.db') && script.includes('-readonly'), 'reads only');
-    assert.ok(!/\b(rm|mv|cp|tee|chmod|kill)\b|>\s*\/(?!dev\/null)/.test(script), 'the script writes nothing');
+    assert.ok(/appLayerCache/.test(seen[0]) && seen.length === 2, 'two read-only calls');
+    assert.ok(seen.every(sc => !/\b(rm|mv|cp|tee|chmod|kill)\b|>\s*\/(?!dev\/null)/.test(sc)), 'neither script writes anything');
+    assert.ok(seen[0].includes('.webappservice.db') && seen[0].includes('-readonly'), 'reads only');
+    assert.ok(!ok.tsv.includes(missing), 'an icon file that is gone is not listed');
+    assert.ok(ok.tsv.includes('tvplus\tSamsung TV Plus\torg.tizen.tv-viewer\n'), 'TV Plus stays, with a generic icon');
+    assert.ok(ok.tsv.includes('/opt/share/webappservice/apps_icon/all/aaa/224x224.png'), 'icons that exist stay');
+    assert.ok(ok.skipped.some(x => x.item === 'tvplus' && /Icon file missing/.test(x.reason)));
+    // If the existence check itself fails, the paths stay (the dock copes with an unloadable file)
+    const lenient = await catalog.load(async cmd => {
+        const script = Buffer.from(cmd.split(' ')[1], 'base64').toString();
+        if (script.includes('.appLayerCache')) return {exit_code: 0, stdout: OUTPUT};
+        throw new Error('busy');
+    });
+    assert.ok(lenient.tsv.includes(missing));
     await assert.rejects(catalog.load(async () => ({exit_code: 0, stdout: 'R|' + hex('a') + '|' + hex('A') + '|' + hex('x.a') + '|0'})), /empty or unreadable/);
     await assert.rejects(catalog.load(async () => ({exit_code: 0, stdout: 'O|d/webapp@zz'})), /could be matched/);
     await assert.rejects(catalog.load(async () => ({exit_code: 1, stdout: '', stderr: 'boom'})), /boom/);

@@ -226,7 +226,18 @@ def _render(accent, glyph, path, round_control=False):
     out.save(path)
 
 
+# Generic icons for the two live TV entries, used when the TV has no icon file for them
+# (the registry's TV Plus icon path can be stale, and live TV has none): the TV glyph again.
+LIVE = {"livetv": (120, 214, 160), "tvplus": (255, 170, 90)}
+
+
+def render_live(slug, path):
+    _render(LIVE[slug], _phosphor("television-simple-bold", 66), path)
+
+
 def render_all(icons_dir):
+    for slug in LIVE:
+        render_live(slug, os.path.join(icons_dir, slug + ".png"))
     for slug in SYSTEM:
         render(slug, os.path.join(icons_dir, slug + ".png"))
     for slug in INPUTS:

@@ -34,28 +34,89 @@ namespace Launcher.Core
             return Math.Max(MinSide, Math.Min(MaxSide, Math.Max(w, h)));
         }
 
-        /// <summary>Returns the finished icon: <paramref name="side"/> x <paramref name="side"/> pixels.</summary>
+        /// <summary>Returns the finished icon: <see cref="SideFor"/> x <see cref="SideFor"/> pixels.</summary>
         public static uint[] Prepare(uint[] src, int w, int h)
         {
             if (w <= 0 || h <= 0 || src == null || src.Length < w * h) throw new ArgumentException("bad icon size");
+            // Big pictures (some apps ship a full-screen banner as their icon) are first brought down by whole halvings.
             int side = SideFor(w, h);
-            uint[] outPx;
+            while (Math.Max(w, h) >= 2 * side && w > 1 && h > 1) { src = Halve(src, w, h); w = (w + 1) / 2; h = (h + 1) / 2; }
             bool square = w == h;
-            if (square && Coverage(src) >= LooseCoverage)
-                outPx = square && w == side ? (uint[])src.Clone() : Scale(src, w, h, side, side);
+            bool filled = Coverage(src) >= LooseCoverage;
+            uint[] outPx;
+            if (square && filled)
+                outPx = w == side ? (uint[])src.Clone() : Scale(src, w, h, side, side);
+            else if (filled)
+            {
+                // Not square but opaque (a wide banner): never cropped. A blurred stretch of the picture fills
+                // the square and the whole picture sits in the middle of it.
+                outPx = Scale(src, w, h, side, side);
+                Blur(outPx, side, Math.Max(2, side / 10));
+                int fw = w >= h ? side : Math.Max(1, (int)Math.Round(side * (double)w / h));
+                int fh = h >= w ? side : Math.Max(1, (int)Math.Round(side * (double)h / w));
+                Over(outPx, side, Scale(src, w, h, fw, fh), fw, fh, (side - fw) / 2, (side - fh) / 2);
+            }
             else
             {
+                // A loose logo on transparency: a dark glass tile behind it, a little smaller, whole.
                 outPx = Tile(side);
-                // Fit the whole logo inside the smaller box: never crop it.
                 int box = (int)(side * LooseScale);
                 int gw = w >= h ? box : Math.Max(1, (int)Math.Round(box * (double)w / h));
                 int gh = h >= w ? box : Math.Max(1, (int)Math.Round(box * (double)h / w));
-                uint[] glyph = Scale(src, w, h, gw, gh);
-                Over(outPx, side, glyph, gw, gh, (side - gw) / 2, (side - gh) / 2);
+                Over(outPx, side, Scale(src, w, h, gw, gh), gw, gh, (side - gw) / 2, (side - gh) / 2);
             }
             RoundCorners(outPx, side, Corner(side));
             return outPx;
         }
+
+        /// <summary>2 x 2 box average of premultiplied ARGB; an odd last row or column is averaged on its own.</summary>
+        public static uint[] Halve(uint[] src, int w, int h)
+        {
+            int dw = (w + 1) / 2, dh = (h + 1) / 2;
+            var dst = new uint[dw * dh];
+            for (int y = 0; y < dh; y++)
+                for (int x = 0; x < dw; x++)
+                {
+                    int x1 = Math.Min(w - 1, 2 * x + 1), y1 = Math.Min(h - 1, 2 * y + 1);
+                    uint a = src[2 * y * w + 2 * x], b = src[2 * y * w + x1], c = src[y1 * w + 2 * x], d = src[y1 * w + x1];
+                    uint res = 0;
+                    for (int shift = 0; shift <= 24; shift += 8)
+                        res |= ((((a >> shift) & 0xFF) + ((b >> shift) & 0xFF) + ((c >> shift) & 0xFF) + ((d >> shift) & 0xFF) + 2) / 4) << shift;
+                    dst[y * dw + x] = res;
+                }
+            return dst;
+        }
+
+        /// <summary>Three passes of a box blur in each direction (close to a Gaussian), on a square picture.</summary>
+        public static void Blur(uint[] px, int side, int radius)
+        {
+            var tmp = new uint[px.Length];
+            for (int pass = 0; pass < 3; pass++)
+            {
+                BoxPass(px, tmp, side, radius, true);
+                BoxPass(tmp, px, side, radius, false);
+            }
+        }
+
+        private static void BoxPass(uint[] src, uint[] dst, int side, int radius, bool horizontal)
+        {
+            int n = 2 * radius + 1;
+            for (int line = 0; line < side; line++)
+                for (int shift = 0; shift <= 24; shift += 8)
+                {
+                    long sum = 0;
+                    for (int k = -radius; k <= radius; k++)
+                        sum += (src[Index(line, Math.Max(0, Math.Min(side - 1, k)), side, horizontal)] >> shift) & 0xFF;
+                    for (int i = 0; i < side; i++)
+                    {
+                        dst[Index(line, i, side, horizontal)] = (dst[Index(line, i, side, horizontal)] & ~(0xFFu << shift)) | ((uint)(sum / n) << shift);
+                        int add = Math.Min(side - 1, i + radius + 1), sub = Math.Max(0, i - radius);
+                        sum += ((src[Index(line, add, side, horizontal)] >> shift) & 0xFF) - ((src[Index(line, sub, side, horizontal)] >> shift) & 0xFF);
+                    }
+                }
+        }
+
+        private static int Index(int line, int i, int side, bool horizontal) { return horizontal ? line * side + i : i * side + line; }
 
         /// <summary>Dark glass tile with a faint rim, the colour of the dock's own system tiles.</summary>
         public static uint[] Tile(int side)
