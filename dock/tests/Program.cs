@@ -34,6 +34,12 @@ namespace Launcher.Tests
 
     internal static class Program
     {
+        /// <summary>Advances a controller by a span of time in frames of at most 1/120 s (Tick caps a single step).</summary>
+        private static void Run(Controller c, double seconds)
+        {
+            while (seconds > 1e-9) { double dt = Math.Min(1 / 120.0, seconds); c.Tick(dt); seconds -= dt; }
+        }
+
         private static Controller NewController(int count, out DockLayout layout)
         {
             layout = new DockLayout(count, 1920, 1080);
@@ -136,7 +142,7 @@ namespace Launcher.Tests
                 for (int i = 0; i < 5; i++)
                 {
                     var h = narrow.GlowBox(i, narrow.ScrollFor(i), 0);
-                    T.True(h.X >= narrow.Left && h.X + h.W <= narrow.Left + narrow.PillW, "highlight inside the pill, item " + i);
+                    T.True(h.X >= 0 && h.X + h.W <= narrow.WinW, "highlight inside the window, item " + i);   // it may spill a little past the bar, as in the design
                 }
             });
 
@@ -376,7 +382,7 @@ namespace Launcher.Tests
                     {
                         float sc = l.ScrollFor(p);
                         var h = l.GlowBox((int)Math.Round(p), sc, 0);
-                        T.True(h.X >= l.Left && h.X + h.W <= l.Left + l.PillW, "glow inside the pill n=" + n + " p=" + p);
+                        T.True(h.X >= 0 && h.X + h.W <= l.WinW, "glow inside the window n=" + n + " p=" + p);
                         var ic = l.IconBox((int)Math.Round(p), p, sc, 0);
                         T.True(ic.X >= clipL && ic.X + ic.W <= clipR, "focused icon not cut by the apps clipper n=" + n + " p=" + p);
                         foreach (int w in new[] { 60, 260, 400 })
@@ -529,6 +535,7 @@ namespace Launcher.Tests
             T.Run("controller: the focus eases in and out like a critically damped spring", () =>
             {
                 DockLayout l; var c = NewController(10, out l);
+                c.Linear = false;
                 c.Show(); while (c.Tick(1 / 60.0)) { }
                 int idx; c.Key("Right", out idx);
                 float prev = c.FocusPos, prevStep = 0f, firstStep = -1f, maxStep = 0f; int frames = 0;
@@ -546,7 +553,7 @@ namespace Launcher.Tests
                 T.True(frames < 120 * 1 && frames > 20, "settles in well under a second, not instantly: " + frames);
                 T.True(!c.Tick(1 / 60.0), "no frame is requested once at rest");
                 // retargeting while moving keeps the position continuous (velocity carries over)
-                var d = NewController(10, out l); d.Show(); while (d.Tick(1 / 60.0)) { }
+                var d = NewController(10, out l); d.Linear = false; d.Show(); while (d.Tick(1 / 60.0)) { }
                 d.Key("Right", out idx); for (int i = 0; i < 6; i++) d.Tick(1 / 60.0);
                 float before = d.FocusPos; d.Key("Right", out idx); d.Tick(1 / 600.0);
                 T.True(Math.Abs(d.FocusPos - before) < 0.02f, "retarget does not jump");
@@ -683,7 +690,7 @@ namespace Launcher.Tests
                 T.Eq(apps.PillBox(0).Y - panel.PillBox(0).Y, DockLayout.HintH, "pill box follows");
                 T.Eq(apps.ShadowBox(0).Y - panel.ShadowBox(0).Y, DockLayout.HintH, "shadow box follows");
                 T.True(apps.ShadowBox(0).Y >= 0 && panel.ShadowBox(0).Y >= 0, "shadow never starts above the window");
-                T.True(apps.ShadowBox(0).Y + apps.ShadowBox(0).H <= apps.WinH + 10, "apps shadow stays in the window (bar its soft tail)");
+                T.True(apps.ShadowBox(0).Y + apps.ShadowBox(0).H <= apps.WinH + Design.ShadowDy, "apps shadow stays in the window (bar its offset: that part is below the screen edge)");
             });
 
             T.Run("layout: hint capsule sits clear of the pill, inside the window, centred", () =>
@@ -767,7 +774,7 @@ namespace Launcher.Tests
                     }
                     var f = l.IconBox((int)Math.Round(p), p, sc, 0);
                     var h = l.GlowBox((int)Math.Round(p), sc, 0);
-                    T.True(h.X >= l.Left && h.X + h.W <= l.Left + l.PillW, "glow inside the pill p=" + p);
+                    T.True(h.X >= 0 && h.X + h.W <= l.WinW, "glow inside the window p=" + p);
                     T.True(f.X >= l.ViewLeft - DockLayout.ClipPad || p >= 20f, "focused app not cut on the left p=" + p);
                 }
                 T.Eq(l.ScrollFor(19f), (float)(l.AppsW - l.ViewportW), "focus on the last app: scrolled to the end");
@@ -865,9 +872,13 @@ namespace Launcher.Tests
                 T.Eq(done.Length, s * s, "same size out");
                 T.Eq(done[0] >> 24, 0u, "the very corner is transparent");
                 T.Eq(done[s / 2 * s + s / 2], 0xFF2080FFu, "the middle is untouched");
-                T.Eq(done[s / 2], 0xFF2080FFu, "the middle of an edge is untouched");
                 int r = IconPrep.Corner(s);
-                T.Eq(r, 29, "radius at 128 is 29");
+                T.Eq(r, (int)Math.Round(Design.IconRadiusPct * s / 100.0), "the radius is the design's percentage of the side");
+                T.Eq(r, 20, "16% of 128");
+                // The thin light line lies just inside the edge, and only there.
+                uint edge = done[s / 2];
+                T.True(((edge >> 16) & 0xFF) > 0x20 && (edge >> 24) == 255u, "the middle of an edge carries the light line");
+                T.Eq(done[4 * s + s / 2], 0xFF2080FFu, "a few pixels in, the picture is untouched");
                 T.Eq(done[r * s + 0] >> 24, 255u, "below the corner arc the edge is opaque");
                 // A transparent canvas with a small opaque square: a loose logo.
                 var loose = new uint[s * s];
@@ -905,6 +916,135 @@ namespace Launcher.Tests
                 bool threw = false;
                 try { IconPrep.Prepare(new uint[3], 10, 10); } catch (ArgumentException) { threw = true; }
                 T.True(threw, "a buffer smaller than the size is refused");
+            });
+
+            T.Run("design: ring and glow share the icon's corner rule", () =>
+            {
+                // One rule for every shape: the radius is a percentage of the side, so it grows with the icon.
+                var l = new DockLayout(11, 1920, 1080, 0, false, 9);
+                for (float p = 0f; p <= 8f; p += 0.25f)
+                {
+                    int i = (int)Math.Round(p);
+                    var ic = l.IconBox(i, p, l.ScrollFor(p), 0);
+                    var rb = l.RingBox(i, p, l.ScrollFor(p), 0);
+                    T.Eq(rb.W, ic.W + 2 * Design.RingW, "ring is the icon plus its width, p=" + p);
+                    T.Eq(rb.X + rb.W / 2, ic.X + ic.W / 2, "ring is centred on the icon, p=" + p);
+                    T.Eq(rb.Y + rb.H / 2, ic.Y + ic.H / 2, "and vertically too, p=" + p);
+                }
+                T.Eq(l.RingBox(2, 2f, 0f, 0).W, DockLayout.FocusIcon + 2 * Design.RingW, "the ring of the selected icon is the size of the ring image's inner box plus its width");
+                T.Eq(DockLayout.HighlightPad, (int)Math.Ceiling(Design.GlowSpread * 1.95), "glow reach = spread + blur, as the glow image is drawn");
+                T.Eq(DockLayout.PillGlowPad, DockLayout.HighlightPad, "pills glow with the same reach");
+                T.True(DockLayout.ClipPad >= (DockLayout.FocusIcon - DockLayout.Icon) / 2 + Design.RingW, "the apps clipper leaves room for the ring");
+                T.Eq(IconPrep.Corner(DockLayout.FocusIcon), (int)Math.Round(Design.IconRadiusPct * DockLayout.FocusIcon / 100.0), "the selected icon's radius");
+            });
+
+            T.Run("layout: lift raises the selected icon and its glow, not the pills", () =>
+            {
+                var l = new DockLayout(11, 1920, 1080, 0, false, 9);
+                int rest = l.IconBox(3, 0f, 0f, 0).Y + l.IconBox(3, 0f, 0f, 0).H / 2;
+                var sel = l.IconBox(3, 3f, 0f, 0);
+                T.Eq(sel.Y + sel.H / 2, l.RowCenterY - Design.Lift, "selected icon is Lift px above the row centre");
+                T.Eq(rest, l.RowCenterY, "an icon at rest sits on the row centre");
+                var g = l.GlowBox(3, 0f, 0);
+                T.Eq(g.Y + g.H / 2, l.RowCenterY - Design.Lift, "the glow rises with it");
+                var pill = l.IconBox(9, 9f, 0f, 0);
+                T.Eq(pill.Y, l.PillTop(9), "a selected pill does not rise");
+                T.Eq(l.PillH, DockLayout.PadTop + DockLayout.FocusIcon + DockLayout.LabelRow + DockLayout.PadBottom, "bar height");
+                if (!Design.ShowLabels && !Design.ShowClock) T.Eq(DockLayout.LabelRow, 0, "no names, no clock: no row for them");
+                T.Eq(l.PillW <= DockLayout.MaxPillW ? 1 : 0, 1, "the bar never exceeds the maximum width");
+                T.Eq(new DockLayout(40, 1920, 1080, 0, false, 38).PillW, DockLayout.MaxPillW, "a long row fills the maximum width");
+                T.Eq(l.WinY + l.WinH, 1080 - DockLayout.BottomGap, "the window ends at the bottom");
+                T.Eq(1080 - (l.WinY + l.Top + l.PillH), DockLayout.Margin + DockLayout.BottomGap, "the bar's bottom edge is Margin + BottomGap above the screen bottom");
+                T.Eq(DockLayout.Margin + DockLayout.BottomGap, 40, "the designer's distance from the edge");
+            });
+
+            T.Run("controller: the cascade brings the items in one after the other", () =>
+            {
+                DockLayout l; var c = NewController(6, out l);
+                T.True(c.Show(), "show");
+                T.Eq(c.ItemPresence(0), 0f, "nothing has come in yet");
+                Run(c, Controller.ShowSeconds / 2);
+                T.True(c.Presence > 0.45f && c.Presence < 0.55f, "the bar fades in over the enter time");
+                T.Eq(c.Slide, 0, "the bar does not slide while the cascade runs");
+                T.True(c.ItemPresence(0) > c.ItemPresence(1) && c.ItemPresence(1) > c.ItemPresence(5), "earlier items are further along");
+                T.True(c.ItemSlide(5) > c.ItemSlide(0), "and have less to rise");
+                // the bar is fully in after the enter time, the last item after the stagger of all the others
+                Run(c, Controller.ShowSeconds / 2 + 0.002);
+                T.Eq(c.Presence, 1f, "bar fully present");
+                T.Eq(c.Phase, Phase.Showing, "still showing: the last item has not landed");
+                T.True(c.ItemPresence(5) < 1f && c.ItemPresence(0) == 1f, "first item landed, last one not");
+                int guard = 0; while (c.Tick(1 / 60.0) && guard++ < 200) { }
+                T.Eq(c.Phase, Phase.Shown, "shown once the last item landed");
+                for (int i = 0; i < 6; i++) { T.Eq(c.ItemPresence(i), 1f, "item " + i + " in"); T.Eq(c.ItemSlide(i), 0, "item " + i + " in place"); }
+                // hiding is uniform: every item follows the bar's presence
+                c.Hide(); Run(c, Controller.HideSeconds / 2);
+                for (int i = 0; i < 6; i++) T.Eq(c.ItemPresence(i), c.Presence, "hide: item " + i + " follows the bar");
+                // a page opened inside a visible dock does not run the cascade
+                DockLayout l2; var from = NewController(6, out l2);
+                from.Show(); while (from.Tick(1 / 60.0)) { }
+                var panel = new Controller(new DockLayout(5, 1920, 1080, 0, true, -1), PageKind.Panel);
+                panel.AdoptVisibility(from, 0.55f);
+                T.True(Math.Abs(panel.Presence - 0.55f) < 1e-6f, "the new page starts a little tucked in");
+                for (int i = 0; i < 5; i++) T.Eq(panel.ItemPresence(i), panel.Presence, "no cascade when a page opens inside a visible dock, item " + i);
+                T.True(panel.Slide > 0, "the whole page rises together");
+                // the warm-up pass draws everything faintly
+                var warm = NewController(6, out l); warm.HoldFaint(0.012f);
+                T.True(warm.ItemPresence(5) > 0f, "the warm-up pass draws the last item too");
+                T.True(warm.ItemPresence(5) == warm.Presence, "at the bar's own faint opacity");
+            });
+
+            T.Run("controller: linear focus moves at constant speed and restarts from where it is", () =>
+            {
+                DockLayout l; var c = NewController(10, out l);
+                c.Show(); while (c.Tick(1 / 60.0)) { }
+                T.True(c.Linear, "linear is the design's motion");
+                int idx; c.Key("Right", out idx);
+                Run(c, Design.FocusSeconds / 4);
+                T.True(Math.Abs(c.FocusPos - 0.25f) < 1e-3f, "a quarter of the time, a quarter of the way: " + c.FocusPos);
+                Run(c, Design.FocusSeconds / 4);
+                T.True(Math.Abs(c.FocusPos - 0.5f) < 1e-3f, "half way after half the time");
+                // a second press mid-way: a fresh run from 0.5 to 2 over the same time
+                c.Key("Right", out idx);
+                Run(c, Design.FocusSeconds / 2);
+                T.True(Math.Abs(c.FocusPos - 1.25f) < 1e-3f, "restarted from where it was: " + c.FocusPos);
+                int guard = 0; while (c.Tick(1 / 60.0) && guard++ < 100) { }
+                T.Eq(c.FocusPos, 2f, "lands exactly on the target");
+                T.True(!c.Tick(1 / 60.0), "and asks for no more frames");
+                T.True(guard < 25, "takes about the focus time: " + guard);
+            });
+
+            T.Run("icons: dominant colour for the glow, thin line along the rounded edge", () =>
+            {
+                int s = 64;
+                var red = new uint[s * s];
+                for (int i = 0; i < red.Length; i++) red[i] = 0xFFE02020u;
+                int rc = IconPrep.DominantColor(red, s, s);
+                T.True(rc >= 0 && ((rc >> 16) & 0xFF) > 200 && ((rc >> 8) & 0xFF) < 60, "a red icon gives red");
+                T.Eq(IconPrep.DominantColor(new uint[s * s], s, s), -1, "a blank picture has no colour");
+                // half grey, half blue: the saturated part wins
+                var mixed = new uint[s * s];
+                for (int i = 0; i < mixed.Length; i++) mixed[i] = (i % s) < s / 2 ? 0xFF808080u : 0xFF2050E0u;
+                int mc = IconPrep.DominantColor(mixed, s, s);
+                T.True((mc & 0xFF) > ((mc >> 16) & 0xFF) + 40, "saturated colours count more than grey: " + mc.ToString("X6"));
+                // a fully transparent pixel does not count; a dark one barely does
+                var dark = new uint[s * s];
+                for (int i = 0; i < dark.Length; i++) dark[i] = (i % s) < s / 2 ? 0xFF101010u : 0xFFD04010u;
+                int dc = IconPrep.DominantColor(dark, s, s);
+                T.True(((dc >> 16) & 0xFF) > 150, "near-black pixels carry little weight: " + dc.ToString("X6"));
+                // the rim follows the corner: pixels just inside the arc are lit, the corner outside it stays clear
+                int side = 128, rad = IconPrep.Corner(side);
+                var tile = new uint[side * side];
+                for (int i = 0; i < tile.Length; i++) tile[i] = 0xFF000000u;
+                IconPrep.RoundCorners(tile, side, rad);
+                IconPrep.Rim(tile, side, rad, 1f, 0.2f);
+                T.Eq(tile[0] >> 24, 0u, "the corner outside the arc stays transparent");
+                // a point on the arc at 45 degrees, one pixel inside it
+                double c45 = rad - rad / Math.Sqrt(2.0);
+                int ax = (int)Math.Floor(rad - (rad - 0.5) / Math.Sqrt(2.0)), ay = ax;
+                T.True((tile[ay * side + ax] & 0xFF) > 20, "the line bends round the corner: " + (tile[ay * side + ax] & 0xFF));
+                T.Eq(tile[side / 2 * side + side / 2], 0xFF000000u, "the middle is untouched");
+                T.True((tile[(side / 2) * side + 0] & 0xFF) > 20, "and it runs along the straight edge");
+                T.Eq(IconPrep.Corner(256), 41, "16% of 256");
             });
 
             T.Run("hot paths allocate nothing (animation frame, keys, evdev read)", () =>

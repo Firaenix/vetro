@@ -246,23 +246,20 @@ dd{margin:0;overflow-wrap:anywhere}
 /* Launcher preview: the stage mirrors the native launcher (1920x1080 scaled down); its glass colours are the TV's own. */
 .lp{--s:.4;position:relative;width:100%;max-width:960px;aspect-ratio:16/9;overflow:hidden;border-radius:var(--r);border:1px solid var(--border);background:linear-gradient(160deg,rgba(var(--accent-rgb),.2),var(--bg) 60%,var(--surface))}
 .lp-stage{position:absolute;left:0;top:0;width:1920px;height:1080px;transform:scale(var(--s));transform-origin:0 0;color:#fff;font-family:var(--font-ui)}
-.lp-pill{position:absolute;left:50%;bottom:48px;transform:translateX(-50%);max-width:1808px;padding:24px 40px 16px;border-radius:48px;background:linear-gradient(rgba(70,82,104,.6),rgba(26,32,44,.66));border:2px solid rgba(255,255,255,.22);box-shadow:0 18px 50px rgba(0,0,0,.45)}
-.lp-row{display:flex;align-items:center;gap:24px;height:132px}
-.lp-tile{position:relative;flex:none;overflow:hidden;background:#222;display:flex;align-items:center;justify-content:center;font-size:36px;color:#cfd6e3}
+.lp-pill{position:absolute;left:50%;bottom:40px;transform:translateX(-50%);max-width:1808px;height:144px;box-sizing:border-box;padding:0 26px;display:flex;align-items:center;border-radius:24px;background:rgba(42,51,70,.98);border:2px solid rgba(255,255,255,.22);box-shadow:0 18px 50px rgba(0,0,0,.45)}
+.lp-row{display:flex;align-items:center;gap:18px;height:112px}
+.lp-tile{position:relative;flex:none;overflow:hidden;background:#222;display:flex;align-items:center;justify-content:center;font-size:36px;color:#cfd6e3;box-shadow:inset 0 0 0 1px rgba(255,255,255,.2)}
 .lp-tile img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
-.lp-loose{background:linear-gradient(#2c364f,#141b2a);box-shadow:inset 0 0 0 2px rgba(255,255,255,.2)}
+.lp-loose{background:linear-gradient(#2c364f,#141b2a)}
 .lp-loose img{inset:14%;width:72%;height:72%;object-fit:contain}
 .lp-wide:before{content:"";position:absolute;inset:-14px;background:var(--bg) center/cover;filter:blur(14px)}
 .lp-wide img{object-fit:contain}
-.lp-oval{background:none}
+.lp-oval{background:none;box-shadow:none}
 .lp-oval img{object-fit:fill}
 .lp-stack{display:flex;flex-direction:column;gap:8px}
-.lp-divider{width:2px;height:56px;background:rgba(255,255,255,.3);margin:0 8px}
-.lp-label{position:relative;height:34px;margin-top:10px;font-size:26px;line-height:34px;text-shadow:0 2px 6px rgba(0,0,0,.6)}
-.lp-label span{position:absolute;left:66px;top:0;transform:translateX(-50%);white-space:nowrap}
-.lp-row>.lp-tile:first-child{box-shadow:0 0 0 4px rgba(255,255,255,.9)}
-.lp-label b{position:absolute;right:0;top:0;font-weight:400;font-size:22px;opacity:.7}
-.lp-hint{position:absolute;left:50%;bottom:316px;transform:translateX(-50%);font-size:24px;opacity:.75;text-shadow:0 2px 6px rgba(0,0,0,.6)}</style></head><body>
+.lp-divider{width:2px;height:72px;background:rgba(255,255,255,.3);margin:0 9px}
+.lp-sel{transform:translateY(-4px);box-shadow:inset 0 0 0 1px rgba(255,255,255,.2),0 0 0 2px #fff,0 0 26px 6px var(--glow,rgba(226,237,255,.44))}
+.lp-hint{position:absolute;left:50%;bottom:194px;height:36px;line-height:36px;transform:translateX(-50%);font-size:22px;opacity:.9;text-shadow:0 2px 6px rgba(0,0,0,.6)}</style></head><body>
 <aside class="sidebar"><div class="brand">vetro<small>TV manager</small></div><nav aria-label="Main"><button data-tab="quick" aria-selected="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>Quick settings</button><button data-tab="dock" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="13" width="18" height="7" rx="2.5"/><path d="M7.5 16.5h.01M12 16.5h.01M16.5 16.5h.01M8 8h8"/></svg>Launcher</button><button data-tab="apps" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Debloater</button></nav><div class="nav-label">TV</div><nav aria-label="TV"><button data-tab="tvsettings" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18"/><circle cx="8" cy="6" r="2"/><circle cx="16" cy="12" r="2"/><circle cx="9" cy="18" r="2"/></svg>TV settings</button><button data-tab="remote" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="2" width="10" height="20" rx="3"/><circle cx="12" cy="8" r="2"/><path d="M10 15h4M10 18h4"/></svg>Remote</button><button data-tab="control" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 4-7 8 7 8M15 4l7 8-7 8"/></svg>TV controls</button></nav><div class="nav-label">Monitor</div><nav aria-label="Monitor"><button data-tab="dashboard" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 10h18M10 10v11"/></svg>Dashboard</button><button data-tab="diagnostics" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-4-4 4 4 4-4M4 17v4h16v-4"/></svg>Diagnostics</button><button data-tab="actions" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/></svg>Actions<span id="actionsCount" class="chip nav-count" hidden></span></button></nav><div class="nav-label">Network</div><nav aria-label="Network"><button data-tab="dns" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m6 6 12 12"/></svg>Domain blocking</button><button data-tab="mqtt" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h16l-4-4M20 16H4l4 4"/></svg>MQTT</button></nav><footer><span id="count">—</span> apps<span id="connection">Connecting to TV…</span></footer></aside>
 <main class="main"><div class="page"><header class="page-head"><div><h1 id="pageTitle">Quick settings</h1><p id="pageSubtitle">Switches that change the TV right away.</p></div><div class="actions"><span id="sampleStatus" class="live" hidden>Live updates off</span><button id="liveToggle" hidden>Start live · 2 min</button></div></header>
 <div id="debloatModes" class="segmented" hidden><button data-mode="apps" aria-selected="true">Apps</button><button data-mode="processes" aria-selected="false">Processes</button><button data-mode="startup" aria-selected="false">Startup</button></div>
@@ -622,13 +619,11 @@ $('quick').onclick=function(e){var b=e.target.closest?e.target.closest('button')
 var dockData=null,dockError=null,dockBusy=false,dockConfirm=false;
 function loadDock(){return api('/dock').then(function(d){dockData=d;dockError=null}).catch(function(e){dockError=e.message}).finally(renderDock)}
 function dockHasTizenTube(d){return (d.entries||[]).some(function(e){return String(e.appId).toLowerCase().indexOf('tizentube')>=0})}
-function previewTile(e,size,pill){return '<div class="lp-tile'+(pill?' lp-oval':'')+'" style="width:'+(pill?232:size)+'px;height:'+(pill?48:size)+'px;border-radius:'+(pill?'24px':'23%')+'"><img alt="" src="/dock/icon?slug='+encodeURIComponent(e.slug)+'" data-initials="'+esc(e.label.slice(0,2))+'"></div>'}
+function previewTile(e,size,pill,sel){return '<div class="lp-tile'+(pill?' lp-oval':'')+(sel?' lp-sel':'')+'" style="width:'+(pill?232:size)+'px;height:'+(pill?48:size)+'px;border-radius:'+(pill?'24px':'16%')+'"><img alt="" src="/dock/icon?slug='+encodeURIComponent(e.slug)+'" data-initials="'+esc(e.label.slice(0,2))+'"></div>'}
 function previewMarkup(d){
- var all=d.entries||[],apps=all.filter(function(e){return !e.system}),sys=all.filter(function(e){return e.system}),now=new Date();
- var clock=('0'+now.getHours()).slice(-2)+':'+('0'+now.getMinutes()).slice(-2);
- var row=apps.map(function(e,i){return previewTile(e,i===0?132:104,false)}).join('')+(sys.length?'<i class="lp-divider"></i>'+'<div class="lp-stack">'+sys.map(function(e){return previewTile(e,104,true)}).join('')+'</div>':'');
- var first=apps[0]||sys[0];
- return '<div class="lp-wrap panel"><h3>Preview</h3><p class="section-note">This TV’s apps and icons; the first app is selected.</p><div class="lp" id="lp" role="img" aria-label="Preview of the launcher on the TV screen"><div class="lp-stage"><div class="lp-hint">Input ˄</div><div class="lp-pill"><div class="lp-row">'+row+'</div><div class="lp-label"><span>'+esc(first?first.label:'')+'</span><b>'+clock+'</b></div></div></div></div></div>';
+ var all=d.entries||[],apps=all.filter(function(e){return !e.system}),sys=all.filter(function(e){return e.system});
+ var row=apps.map(function(e,i){return previewTile(e,i===0?112:92,false,i===0)}).join('')+(sys.length?'<i class="lp-divider"></i>'+'<div class="lp-stack">'+sys.map(function(e){return previewTile(e,92,true,false)}).join('')+'</div>':'');
+ return '<div class="lp-wrap panel"><h3>Preview</h3><p class="section-note">This TV’s apps and icons; the first app is selected.</p><div class="lp" id="lp" role="img" aria-label="Preview of the launcher on the TV screen"><div class="lp-stage"><div class="lp-hint">Source ˄</div><div class="lp-pill"><div class="lp-row">'+row+'</div></div></div></div></div>';
 }
 function fitPreview(){
  var lp=$('lp');if(!lp||!lp.style||!lp.querySelectorAll||!lp.clientWidth)return;
@@ -640,6 +635,11 @@ function fitPreview(){
     var tile=img.parentNode;
     if(Math.abs(w-h)>2){tile.classList.add('lp-wide');tile.style.setProperty('--bg','url('+img.src+')')}
     else if(opaque/1024<0.8)tile.classList.add('lp-loose');
+    if(tile.classList.contains('lp-sel')){
+     var r=0,g=0,b=0,t=0;
+     for(var k=0;k<px.length;k+=4){var a=px[k+3];if(!a)continue;var mx=Math.max(px[k],px[k+1],px[k+2]),mn=Math.min(px[k],px[k+1],px[k+2]),q=(a/255)*(0.15+(mx?(mx-mn)/mx:0))*(mx>40?1:0.2);r+=px[k]*q;g+=px[k+1]*q;b+=px[k+2]*q;t+=q}
+     if(t>0)tile.style.setProperty('--glow','rgba('+Math.round(r/t)+','+Math.round(g/t)+','+Math.round(b/t)+',.44)');
+    }
    }catch(e){}
   }
   img.onerror=function(){img.parentNode.classList.add('lp-missing');img.parentNode.textContent=img.dataset.initials||'?'};

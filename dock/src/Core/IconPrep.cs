@@ -25,8 +25,11 @@ namespace Launcher.Core
             return opaque / (float)px.Length;
         }
 
-        /// <summary>Corner radius in pixels, the squircle look of the other tiles (29 at 128).</summary>
-        public static int Corner(int side) { return (int)Math.Round(29.0 * side / 128.0); }
+        /// <summary>Corner radius in pixels: <see cref="Design.IconRadiusPct"/> percent of the side, the same rule every other icon, ring and glow follows.</summary>
+        public static int Corner(int side) { return (int)Math.Round(Design.IconRadiusPct * side / 100.0); }
+
+        /// <summary>Width of the light line inside the edge, in pixels of the finished icon: one pixel at the size the selected icon is drawn.</summary>
+        public static float RimWidth(int side) { return Math.Max(1f, side / (float)DockLayout.FocusIcon); }
 
         /// <summary>The square the finished icon will have for a w x h source.</summary>
         public static int SideFor(int w, int h)
@@ -66,7 +69,63 @@ namespace Launcher.Core
                 Over(outPx, side, Scale(src, w, h, gw, gh), gw, gh, (side - gw) / 2, (side - gh) / 2);
             }
             RoundCorners(outPx, side, Corner(side));
+            if (Design.IconRimAlpha > 0f) Rim(outPx, side, Corner(side), RimWidth(side), Design.IconRimAlpha);
             return outPx;
+        }
+
+        /// <summary>
+        /// Colour for the selection glow: the icon's dominant hue (0xRRGGBB), or -1 when it has none (a blank picture).
+        /// Same recipe as the designer page: a 48 x 48 sample, each pixel weighted by its opacity, its saturation
+        /// and whether it is bright enough to count.
+        /// </summary>
+        public static int DominantColor(uint[] src, int w, int h)
+        {
+            if (w <= 0 || h <= 0 || src == null || src.Length < w * h) return -1;
+            const int n = 48;
+            uint[] s = Scale(src, w, h, n, n);
+            double r = 0, g = 0, b = 0, wt = 0;
+            for (int i = 0; i < s.Length; i++)
+            {
+                uint p = s[i];
+                int a = (int)(p >> 24);
+                if (a == 0) continue;
+                // EFL keeps colours premultiplied; the recipe works on the straight ones.
+                int pr = Math.Min(255, (int)(((p >> 16) & 0xFF) * 255 / a)), pg = Math.Min(255, (int)(((p >> 8) & 0xFF) * 255 / a)), pb = Math.Min(255, (int)((p & 0xFF) * 255 / a));
+                int mx = Math.Max(pr, Math.Max(pg, pb)), mn = Math.Min(pr, Math.Min(pg, pb));
+                double sat = mx > 0 ? (mx - mn) / (double)mx : 0.0;
+                double q = (a / 255.0) * (0.15 + sat) * (mx > 40 ? 1.0 : 0.2);
+                r += pr * q; g += pg * q; b += pb * q; wt += q;
+            }
+            if (wt <= 0) return -1;
+            return ((int)Math.Round(r / wt) << 16) | ((int)Math.Round(g / wt) << 8) | (int)Math.Round(b / wt);
+        }
+
+        /// <summary>
+        /// Blends a thin white line (<paramref name="alpha"/>) over the inside of the rounded edge. It follows the
+        /// same rounded rectangle the corners were cut with, so it bends with the corners instead of ending at them.
+        /// </summary>
+        public static void Rim(uint[] px, int side, int radius, float width, float alpha)
+        {
+            double half = side / 2.0, inner = half - radius;
+            int band = (int)Math.Ceiling(width) + radius + 1;
+            for (int y = 0; y < side; y++)
+                for (int x = 0; x < side; x++)
+                {
+                    if (x >= band && x < side - band && y >= band && y < side - band) continue;   // deep inside
+                    double qx = Math.Abs(x + 0.5 - half) - inner, qy = Math.Abs(y + 0.5 - half) - inner;
+                    double outside = Math.Sqrt(Math.Max(qx, 0) * Math.Max(qx, 0) + Math.Max(qy, 0) * Math.Max(qy, 0)) + Math.Min(Math.Max(qx, qy), 0) - radius;
+                    double depth = -outside;                                  // > 0 inside the rounded edge
+                    double cov = Math.Max(0.0, Math.Min(1.0, width - depth + 0.5));
+                    if (depth < -0.5 || cov <= 0.0) continue;
+                    uint p = px[y * side + x];
+                    uint a = p >> 24;
+                    if (a == 0) continue;
+                    double wgt = cov * alpha;
+                    uint r = (uint)Math.Round(((p >> 16) & 0xFF) * (1 - wgt) + a * wgt);
+                    uint g = (uint)Math.Round(((p >> 8) & 0xFF) * (1 - wgt) + a * wgt);
+                    uint b = (uint)Math.Round((p & 0xFF) * (1 - wgt) + a * wgt);
+                    px[y * side + x] = (a << 24) | (Math.Min(r, a) << 16) | (Math.Min(g, a) << 8) | Math.Min(b, a);
+                }
         }
 
         /// <summary>2 x 2 box average of premultiplied ARGB; an odd last row or column is averaged on its own.</summary>
@@ -118,7 +177,7 @@ namespace Launcher.Core
 
         private static int Index(int line, int i, int side, bool horizontal) { return horizontal ? line * side + i : i * side + line; }
 
-        /// <summary>Dark glass tile with a faint rim, the colour of the dock's own system tiles.</summary>
+        /// <summary>Dark tile (a vertical gradient), the colour of the dock's own system tiles. The light edge line is added later, along the rounded edge.</summary>
         public static uint[] Tile(int side)
         {
             var px = new uint[side * side];
@@ -128,12 +187,7 @@ namespace Launcher.Core
                 int r = (int)(44 - 24 * t), g = (int)(54 - 28 * t), b = (int)(82 - 38 * t);
                 for (int x = 0; x < side; x++)
                 {
-                    int rr = r, gg = g, bb = b;
-                    if (x == 0 || y == 0 || x == side - 1 || y == side - 1)   // 1 px rim, white at ~25%
-                    {
-                        rr += (255 - rr) / 4; gg += (255 - gg) / 4; bb += (255 - bb) / 4;
-                    }
-                    px[y * side + x] = 0xFF000000u | ((uint)rr << 16) | ((uint)gg << 8) | (uint)bb;
+                    px[y * side + x] = 0xFF000000u | ((uint)r << 16) | ((uint)g << 8) | (uint)b;
                 }
             }
             return px;

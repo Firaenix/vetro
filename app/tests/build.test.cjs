@@ -5,7 +5,7 @@ const info = require('../service/package-info.js');
 const files = build.collectFiles(); const names = files.map(file => decodeURIComponent(file.uri));
 assert.ok(names.includes('service/platform.js'));
 const dockRes = names.filter(name => name.startsWith('native/dock/res/'));
-['chev_down', 'chev_up', 'dock_bg', 'dock_glow', 'dock_glow_pill', 'glass_tile', 'shadow', 'icons/settings', 'icons/samsunghome', 'icons/livetv', 'icons/in-tv'].forEach(
+['chev_down', 'chev_up', 'dock_bg', 'dock_glow', 'dock_glow_pill', 'dock_ring', 'glass_tile', 'shadow', 'icons/settings', 'icons/samsunghome', 'icons/livetv', 'icons/in-tv'].forEach(
     base => assert.ok(dockRes.includes('native/dock/res/' + base + '.png'), 'dock image packaged: ' + base));
 assert.ok(dockRes.includes('native/dock/res/inputs.tsv'));
 assert.ok(dockRes.every(name => /\.(png|tsv)$/.test(name)), 'only images and the inputs list are packaged from dock/res');

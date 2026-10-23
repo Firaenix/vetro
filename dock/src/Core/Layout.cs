@@ -18,22 +18,25 @@ namespace Launcher.Core
     /// </summary>
     internal sealed class DockLayout
     {
-        public const int Icon = 104;
-        public const int FocusIcon = 132;
-        public const int Gap = 24;
-        public const int PadX = 40;
-        public const int PadTop = 24;
+        public const int Icon = 92;
+        public const int FocusIcon = 112;
+        public const int Gap = 18;
+        public const int PadX = 26;
+        public const int PadTop = 16;
         public const int LabelGap = 10;
         public const int LabelH = 34;
         public const int PadBottom = 16;
-        public const int Margin = 28;          // room for the pill shadow on every side
-        public const int BottomGap = 12;       // window bottom to screen bottom
-        public const int ScreenSideGap = 24;   // pill never closer than this to the screen edge
-        public const int HighlightPad = 24;      // reach of the soft glow around the focused icon
+        /// <summary>Height of the name/clock row under the icons; none when the design shows neither.</summary>
+        public static readonly int LabelRow = Design.ShowLabels || Design.ShowClock ? LabelGap + LabelH : 0;
+        public const int Margin = 40;          // room for the bar's shadow on every side (also: pill bottom to screen bottom)
+        public const int BottomGap = 0;        // window bottom to screen bottom
+        public const int ScreenSideGap = 12;   // pill never closer than this to the screen edge
+        public const int MaxPillW = 1808;      // the bar is never wider than this
+        public const int HighlightPad = 32;      // reach of the soft glow around the focused icon (spread * 1.95, rounded up)
         public const int SlideDistance = 48;
         // The apps clipper is wider than the app viewport by this much on both sides, so the enlarged focused
-        // icon is never cut at the first and last app. (The glow is not clipped: it always fits in the padding.)
-        public const int ClipPad = (FocusIcon - Icon) / 2 + 2;
+        // icon and its ring are never cut at the first and last app. (The glow is not clipped: it always fits in the padding.)
+        public const int ClipPad = (FocusIcon - Icon) / 2 + Design.RingW;
         /// <summary>Space between the scrolling apps and the pinned system entries; the divider sits in its middle.</summary>
         public const int GroupGap = 56;
         public const int Pitch = Icon + Gap;
@@ -41,8 +44,8 @@ namespace Launcher.Core
         public const int PillItemW = 232;
         public const int PillItemH = 48;
         public const int PillItemGap = 8;
-        /// <summary>Reach of the capsule glow around a focused pill (smaller than the icons': the pills are stacked close together).</summary>
-        public const int PillGlowPad = 16;
+        /// <summary>Reach of the capsule glow around a focused pill (same spread as the icons' glow).</summary>
+        public const int PillGlowPad = 32;
         /// <summary>Smallest space kept between the label and the clock; with less, the clock is not drawn.</summary>
         public const int ClockGap = 16;
         // Room for the navigation hint ("Input" above the apps, "Back" below the inputs): HintH is the
@@ -50,7 +53,7 @@ namespace Launcher.Core
         public const int HintH = 46;
         public const int CapsuleH = 36;
         public const int DividerW = 2;
-        public const int DividerH = 56;
+        public const int DividerH = 72;
 
         public readonly int Count, ScreenW, ScreenH;
         /// <summary>Natural width of the whole strip: the apps, then (when grouped) the gap and the pinned entries.</summary>
@@ -94,10 +97,10 @@ namespace Launcher.Core
             PinnedW = PinnedCount == 0 ? 0 : PillItemW;      // the pills are stacked in one column
             int fixedW = PinnedCount == 0 ? 0 : GroupGap + PinnedW;
             ContentW = AppsW + fixedW;
-            int maxPill = screenW - 2 * Margin - 2 * ScreenSideGap;
+            int maxPill = Math.Min(MaxPillW, screenW - 2 * Margin - 2 * ScreenSideGap);
             PillW = Math.Min(ContentW + 2 * PadX, maxPill);
             ViewportW = PillW - 2 * PadX - fixedW;
-            PillH = PadTop + FocusIcon + LabelGap + LabelH + PadBottom;
+            PillH = PadTop + FocusIcon + LabelRow + PadBottom;
             WinW = PillW + 2 * Margin;
             if (windowW > WinW) { OffsetX = (windowW - WinW) / 2; WinW = windowW; }
             WinH = PillH + 2 * Margin + HintH;
@@ -169,7 +172,18 @@ namespace Launcher.Core
             Box b;
             b.W = size; b.H = size;
             b.X = cx - size / 2;
-            b.Y = RowCenterY - size / 2 + slide;
+            b.Y = RowCenterY - size / 2 - (int)Math.Round(Design.Lift * amount) + slide;   // the selected icon rises
+            return b;
+        }
+
+        /// <summary>
+        /// The focus ring: the icon's box grown by the ring width on every side. The ring image is scaled with the
+        /// box, so its corner radius stays the same percentage of the icon as the icon's own.
+        /// </summary>
+        public Box RingBox(int i, float focusPos, float scroll, int slide)
+        {
+            Box b = IconBox(i, focusPos, scroll, slide);
+            b.X -= Design.RingW; b.Y -= Design.RingW; b.W += 2 * Design.RingW; b.H += 2 * Design.RingW;
             return b;
         }
 
@@ -207,7 +221,7 @@ namespace Launcher.Core
             Box b;
             b.W = w; b.H = h;
             b.X = cx - w / 2;
-            b.Y = (pill ? PillTop(i) - pad : RowCenterY - h / 2) + slide;
+            b.Y = (pill ? PillTop(i) - pad : RowCenterY - h / 2 - Design.Lift) + slide;   // the glow rises with the selected icon
             return b;
         }
 
@@ -218,8 +232,8 @@ namespace Launcher.Core
 
         public Box ShadowBox(int slide)
         {
-            const int extra = 20;
-            Box b; b.X = Left - extra; b.Y = Top - extra + 10 + slide; b.W = PillW + 2 * extra; b.H = PillH + 2 * extra; return b;
+            const int extra = Margin;   // the shadow image holds exactly the window margin around the bar
+            Box b; b.X = Left - extra; b.Y = Top - extra + Design.ShadowDy + slide; b.W = PillW + 2 * extra; b.H = PillH + 2 * extra; return b;
         }
 
         /// <summary>Window-relative x of the centre of item <paramref name="item"/>'s label (under its icon).</summary>

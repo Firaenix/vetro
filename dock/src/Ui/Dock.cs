@@ -7,7 +7,7 @@ namespace Launcher.Ui
 {
     /// <summary>
     /// The evas objects of the dock and the code that maps controller state onto them.
-    /// Object count is items + 6 (shadow, pill, clipper, highlight, label, clock), plus the divider
+    /// Object count is items + 8 (shadow, pill, clippers, two glows, two focus rings; two labels and the clock only when the design shows names), plus the divider
     /// when the strip has a system group and two for the navigation hint (word, chevron);
     /// icons are pre-sized PNGs, and <see cref="Apply"/> only calls into EFL for values that changed
     /// since the previous frame, so an animation frame costs a handful of native calls.
@@ -22,7 +22,7 @@ namespace Launcher.Ui
         private readonly string _assets;
         private readonly Action<string> _log;
 
-        private IntPtr _shadow, _pill, _clip, _appsClip, _highlight, _highlight2, _clock, _divider;
+        private IntPtr _shadow, _pill, _clip, _appsClip, _highlight, _highlight2, _ring, _ring2, _clock, _divider;
         // Two name labels cross-fade (see LabelFader): the name under the icon being left and the one being reached.
         private readonly IntPtr[] _label = new IntPtr[2];
         private readonly LabelFader _fader = new LabelFader();
@@ -39,8 +39,11 @@ namespace Launcher.Ui
 
         private readonly Box[] _iconBox;
         private readonly int[] _iconAlpha;
-        private Box _shadowBox, _pillBox, _hlBox, _hlBox2;
-        private int _chromeAlpha = -1, _hlAlpha = -1, _hlAlpha2 = -1, _clockAlpha = -1;
+        private Box _shadowBox, _pillBox, _hlBox, _hlBox2, _ringBox, _ringBox2;
+        private int _chromeAlpha = -1, _hlAlpha = -1, _hlAlpha2 = -1, _clockAlpha = -1, _ringAlpha = -1, _ringAlpha2 = -1;
+        private int _hlRgb = -1, _hlRgb2 = -1;
+        // Colour of each item's glow: the icon's dominant hue, or the design's own colour.
+        private readonly int[] _glowRgb;
         private bool _hlRound, _hlRound2;      // which outline each glow object currently shows
         private int _clockW, _clockX = int.MinValue, _clockY = int.MinValue;
         private int _current = -1;
@@ -62,18 +65,20 @@ namespace Launcher.Ui
             _initials = new IntPtr[items.Length];
             _iconBox = new Box[items.Length];
             _iconAlpha = new int[items.Length];
-            for (int i = 0; i < items.Length; i++) { _iconBox[i].W = -1; _iconAlpha[i] = -1; }
-            _shadowBox.W = _pillBox.W = _hlBox.W = _hlBox2.W = -1;
+            _glowRgb = new int[items.Length];
+            for (int i = 0; i < items.Length; i++) { _iconBox[i].W = -1; _iconAlpha[i] = -1; _glowRgb[i] = Design.GlowColor; }
+            _shadowBox.W = _pillBox.W = _hlBox.W = _hlBox2.W = _ringBox.W = _ringBox2.W = -1;
         }
 
         public IntPtr Evas { get { return _evas; } }
 
         public void Build()
         {
-            // z-order is creation order: shadow < pill < highlight < icons < label.
-            _shadow = NineSlice("shadow", 66);
-            _pill = NineSlice("dock_bg", 56);
-            // No selector shape: the focused icon grows and a soft glow, drawn at its final size, sits behind it.
+            // z-order is creation order: shadow < pill < highlight < icons < ring < label.
+            // The shadow image holds the window margin plus the bar's corner curve; the bar's own slice is a little wider than its corner.
+            _shadow = NineSlice("shadow", DockLayout.Margin + Design.ShellRadius);
+            _pill = NineSlice("dock_bg", Design.ShellSlice);
+            // The focused icon grows and a soft glow, drawn at its final size, sits behind it; a thin ring is drawn around it.
             _highlight = NineSlice("dock_glow", 0);
             _highlight2 = NineSlice("dock_glow", 0);
 
@@ -96,6 +101,9 @@ namespace Launcher.Ui
             }
             Efl.evas_object_clip_set(_highlight, _clip);
             Efl.evas_object_clip_set(_highlight2, _clip);
+            // The ring follows the icon's box, grown by its width: one object per icon being left and reached, like the glow.
+            _ring = RingImage();
+            _ring2 = RingImage();
 
             if (_layout.GroupStart >= 0)
             {
@@ -106,21 +114,25 @@ namespace Launcher.Ui
                 _dividerBox.W = -1;
             }
 
-            for (int k = 0; k < 2; k++)
-            {
-                _label[k] = Efl.evas_object_text_add(_evas);
-                Efl.evas_object_text_font_set(_label[k], Font, 26);
-                SoftShadow(_label[k]);
-                TintText(_label[k], 0);
-                Efl.evas_object_show(_label[k]);
-            }
+            if (Design.ShowLabels)
+                for (int k = 0; k < 2; k++)
+                {
+                    _label[k] = Efl.evas_object_text_add(_evas);
+                    Efl.evas_object_text_font_set(_label[k], Font, 26);
+                    SoftShadow(_label[k]);
+                    TintText(_label[k], 0);
+                    Efl.evas_object_show(_label[k]);
+                }
 
-            _clock = Efl.evas_object_text_add(_evas);
-            Efl.evas_object_text_font_set(_clock, Font, 22);
-            Efl.evas_object_text_text_set(_clock, "--:--");
-            _clockW = Efl.evas_object_text_horiz_advance_get(_clock);
-            SoftShadow(_clock);
-            Efl.evas_object_show(_clock);
+            if (Design.ShowClock)
+            {
+                _clock = Efl.evas_object_text_add(_evas);
+                Efl.evas_object_text_font_set(_clock, Font, 22);
+                Efl.evas_object_text_text_set(_clock, "--:--");
+                _clockW = Efl.evas_object_text_horiz_advance_get(_clock);
+                SoftShadow(_clock);
+                Efl.evas_object_show(_clock);
+            }
 
             if (_hint != null) BuildHint();
         }
@@ -192,6 +204,7 @@ namespace Launcher.Ui
 
         public void SetClock(string text)
         {
+            if (_clock == IntPtr.Zero) return;   // this design shows no clock
             Efl.evas_object_text_text_set(_clock, text);
             _clockW = Efl.evas_object_text_horiz_advance_get(_clock);
             _clockX = int.MinValue;   // re-place on the next frame: the width may have changed
@@ -202,6 +215,20 @@ namespace Launcher.Ui
             if (round == wantRound) return;
             round = wantRound;
             Efl.evas_object_image_file_set(img, Path.Combine(_assets, (round ? "dock_glow_pill" : "dock_glow") + ".png"), null);
+        }
+
+        /// <summary>The focus ring image: a white outline that is scaled to the icon's box, so its corners keep the icon's proportions.</summary>
+        private IntPtr RingImage()
+        {
+            IntPtr img = Efl.evas_object_image_add(_evas);
+            Efl.evas_object_image_file_set(img, Path.Combine(_assets, "dock_ring.png"), null);
+            if (Efl.evas_object_image_load_error_get(img) != Efl.EvasLoadErrorNone) _log("asset missing: dock_ring");
+            Efl.evas_object_image_filled_set(img, true);
+            Efl.evas_object_image_smooth_scale_set(img, true);
+            Efl.evas_object_color_set(img, 0, 0, 0, 0);
+            Efl.evas_object_clip_set(img, _clip);
+            Efl.evas_object_show(img);
+            return img;
         }
 
         private IntPtr NineSlice(string name, int border) { return NineSlice(name, border, border, border, border); }
@@ -223,8 +250,9 @@ namespace Launcher.Ui
         {
             AppEntry e = _items[idx];
             IntPtr img = Efl.evas_object_image_add(_evas);
-            bool fromRegistry = e.IconPath != null && LoadRegistryIcon(img, e);
+            bool fromRegistry = e.IconPath != null && LoadRegistryIcon(img, e, idx);
             if (!fromRegistry) Efl.evas_object_image_file_set(img, Path.Combine(_assets, "icons", e.Slug + ".png"), null);
+            if (!fromRegistry && Efl.evas_object_image_load_error_get(img) == Efl.EvasLoadErrorNone) SampleGlowColor(img, idx);
             if (!fromRegistry && Efl.evas_object_image_load_error_get(img) != Efl.EvasLoadErrorNone)
             {
                 // No icon on disk: a plain glass tile with the app's initials keeps the entry usable.
@@ -249,7 +277,7 @@ namespace Launcher.Ui
         /// rounded corners, a dark tile behind loose logos. Returns false, with the image object left
         /// unspecified, when anything fails, and the caller falls back to the pre-made icon.
         /// </summary>
-        private bool LoadRegistryIcon(IntPtr img, AppEntry e)
+        private bool LoadRegistryIcon(IntPtr img, AppEntry e, int idx)
         {
             try
             {
@@ -261,6 +289,8 @@ namespace Launcher.Ui
                 IntPtr data = Efl.evas_object_image_data_get(img, false);
                 if (data == IntPtr.Zero) { _log("registry icon has no pixels: " + e.Slug); return false; }
                 uint[] src = ReadPixels(data, Efl.evas_object_image_stride_get(img), w, h);
+                int hue = IconPrep.DominantColor(src, w, h);
+                if (hue >= 0) _glowRgb[idx] = hue;
                 uint[] done = IconPrep.Prepare(src, w, h);
                 int side = IconPrep.SideFor(w, h);
                 Efl.evas_object_image_alpha_set(img, true);
@@ -274,6 +304,27 @@ namespace Launcher.Ui
                 return true;
             }
             catch (Exception ex) { _log("registry icon error (" + e.Slug + "): " + ex.Message); return false; }
+        }
+
+        /// <summary>Takes the glow colour from an icon that was loaded from a file (the dock's own icons).</summary>
+        private void SampleGlowColor(IntPtr img, int idx)
+        {
+            try
+            {
+                int w, h;
+                Efl.evas_object_image_size_get(img, out w, out h);
+                if (w <= 0 || h <= 0 || w > 2048 || h > 2048) return;
+                IntPtr data = Efl.evas_object_image_data_get(img, false);
+                if (data == IntPtr.Zero) return;
+                int hue = IconPrep.DominantColor(ReadPixels(data, Efl.evas_object_image_stride_get(img), w, h), w, h);
+                if (hue >= 0) _glowRgb[idx] = hue;
+            }
+            catch (Exception ex) { _log("glow colour unavailable (" + _items[idx].Slug + "): " + ex.Message); }
+        }
+
+        private int GlowRgb(int i)
+        {
+            return i < 0 || _layout.IsPinned(i) || !Design.GlowFromIcon ? Design.GlowColor : _glowRgb[i];
         }
 
         private static uint[] ReadPixels(IntPtr data, int stride, int w, int h)
@@ -320,6 +371,12 @@ namespace Launcher.Ui
         /// <summary>Premultiplied white at the given opacity (0..255).</summary>
         private static void Tint(IntPtr o, int a) { Efl.evas_object_color_set(o, a, a, a, a); }
 
+        /// <summary>Premultiplied colour (0xRRGGBB) at the given opacity: tints a white image.</summary>
+        private static void TintRgb(IntPtr o, int a, int rgb)
+        {
+            Efl.evas_object_color_set(o, ((rgb >> 16) & 0xFF) * a / 255, ((rgb >> 8) & 0xFF) * a / 255, (rgb & 0xFF) * a / 255, a);
+        }
+
         public void Apply(Controller c)
         {
             int slide = c.Slide;
@@ -345,26 +402,37 @@ namespace Launcher.Ui
                 Efl.evas_object_resize(_appsClip, _layout.ViewportW + 2 * DockLayout.ClipPad, _layout.WinH);
             }
 
-            // The glow never slides: it dies out on the icon being left while it lights up on the one being
-            // reached (two objects, one per icon), following the same eased focus as the icon growth.
+            // The glow stays with its item: it dies out on the icon being left while it lights up on the one being
+            // reached (two objects, one per icon), following the same focus as the icon growth. It comes in with its item.
             int g1, g2; float w2;
             _layout.GlowAt(fp, out g1, out g2, out w2);
             // The pinned system entries are oval pills: their glow follows a capsule, not the apps' rounded square.
-            GlowShape(_highlight, ref _hlRound, g1 >= 0 && _layout.IsPinned(g1));
-            GlowShape(_highlight2, ref _hlRound2, g2 >= 0 && _layout.IsPinned(g2));
-            Place(_highlight, ref _hlBox, _layout.GlowBox(g1, scroll, slide));
-            Place(_highlight2, ref _hlBox2, _layout.GlowBox(g2, scroll, slide));
-            int ga1 = (int)Math.Round(presence * (1f - w2)), ga2 = (int)Math.Round(presence * w2);
-            if (ga1 != _hlAlpha) { _hlAlpha = ga1; Tint(_highlight, ga1); }
-            if (ga2 != _hlAlpha2) { _hlAlpha2 = ga2; Tint(_highlight2, ga2); }
+            bool pin1 = g1 >= 0 && _layout.IsPinned(g1), pin2 = g2 >= 0 && _layout.IsPinned(g2);
+            GlowShape(_highlight, ref _hlRound, pin1);
+            GlowShape(_highlight2, ref _hlRound2, pin2);
+            Place(_highlight, ref _hlBox, _layout.GlowBox(g1, scroll, c.ItemSlide(g1)));
+            Place(_highlight2, ref _hlBox2, _layout.GlowBox(g2, scroll, c.ItemSlide(g2)));
+            int ga1 = (int)Math.Round(255f * c.ItemPresence(g1) * (1f - w2)), ga2 = (int)Math.Round(255f * c.ItemPresence(g2) * w2);
+            int gc1 = GlowRgb(g1), gc2 = GlowRgb(g2);
+            if (ga1 != _hlAlpha || gc1 != _hlRgb) { _hlAlpha = ga1; _hlRgb = gc1; TintRgb(_highlight, ga1, gc1); }
+            if (ga2 != _hlAlpha2 || gc2 != _hlRgb2) { _hlAlpha2 = ga2; _hlRgb2 = gc2; TintRgb(_highlight2, ga2, gc2); }
+
+            // The focus ring hugs the selected icon (never a pill) and grows with it, so it keeps the icon's own corner radius.
+            Place(_ring, ref _ringBox, _layout.RingBox(g1, fp, scroll, c.ItemSlide(g1)));
+            Place(_ring2, ref _ringBox2, _layout.RingBox(g2, fp, scroll, c.ItemSlide(g2)));
+            int ra1 = pin1 ? 0 : ga1, ra2 = pin2 ? 0 : ga2;
+            if (ra1 != _ringAlpha) { _ringAlpha = ra1; TintRgb(_ring, ra1, Design.RingColor); }
+            if (ra2 != _ringAlpha2) { _ringAlpha2 = ra2; TintRgb(_ring2, ra2, Design.RingColor); }
 
             for (int i = 0; i < _icon.Length; i++)
             {
-                Box b = _layout.IconBox(i, fp, scroll, slide);
+                // Every item comes in on its own turn (the cascade); a pill stays a little dimmer than an icon until selected.
+                Box b = _layout.IconBox(i, fp, scroll, c.ItemSlide(i));
                 Place(_icon[i], ref _iconBox[i], b);
 
                 float amount = DockLayout.Amount(fp, i);
-                int a = (int)Math.Round(presence * (0.88f + 0.12f * amount));
+                float dim = _layout.IsPinned(i) ? Design.PillDim : Design.IconDim;
+                int a = (int)Math.Round(255f * c.ItemPresence(i) * (dim + (1f - dim) * amount));
                 if (a != _iconAlpha[i])
                 {
                     _iconAlpha[i] = a;
@@ -382,12 +450,12 @@ namespace Launcher.Ui
             if (_divider != IntPtr.Zero)
             {
                 Place(_divider, ref _dividerBox, _layout.DividerBox(scroll, slide));
-                int da = (int)Math.Round(presence * 0.4f);     // a hairline: felt more than seen
+                int da = (int)Math.Round(presence * Design.DividerAlpha);     // a hairline: felt more than seen
                 if (da != _dividerAlpha) { _dividerAlpha = da; Tint(_divider, da); }
             }
 
-            ApplyLabels(c, slide, presence, scroll);
-            ApplyClock(slide, presence);
+            if (Design.ShowLabels) ApplyLabels(c, slide, presence, scroll);
+            if (Design.ShowClock) ApplyClock(slide, presence);
             if (_hintText != IntPtr.Zero) ApplyHint(slide, presence);
         }
 

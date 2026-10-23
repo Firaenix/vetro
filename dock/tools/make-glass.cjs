@@ -15,6 +15,35 @@ const zlib = require('zlib');
 
 const SS = 3;
 
+// Every size and look value comes from the C# sources, so a picture can never disagree with the code that draws it.
+const K = (() => {
+    const out = {};
+    for (const f of ['Layout.cs', 'Design.cs']) {
+        const src = fs.readFileSync(path.join(__dirname, '..', 'src', 'Core', f), 'utf8');
+        const re = /public (?:const|static readonly) (?:int|float|double) (\w+)\s*=\s*(0x[0-9A-Fa-f]+|-?[0-9.]+)f?\s*;/g;
+        let m;
+        while ((m = re.exec(src))) out[m[1]] = m[2].startsWith('0x') ? parseInt(m[2], 16) : parseFloat(m[2]);
+    }
+    return out;
+})();
+const need = (...names) => names.forEach(n => { if (!(n in K)) throw new Error('constant missing in the C# sources: ' + n); });
+need('FocusIcon', 'HighlightPad', 'PillGlowPad', 'PillItemW', 'PillItemH', 'Margin', 'ShellRadius', 'ShellColor', 'ShellAlpha', 'ShellBorderW',
+    'ShellBorderColor', 'ShellBorderAlpha', 'ShadowBlur', 'ShadowAlpha', 'IconRadiusPct', 'GlowStrength', 'GlowSpread', 'RingW', 'RingColor');
+const rgb = v => [(v >> 16) & 255, (v >> 8) & 255, v & 255];
+
+// Gaussian tail of a CSS blur: Gaussian of sigma = blur / 2 (Abramowitz-Stegun erf).
+function erf(x) {
+    const s = Math.sign(x); x = Math.abs(x);
+    const t = 1 / (1 + 0.3275911 * x);
+    return s * (1 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-x * x));
+}
+const erfc = x => 1 - erf(x);
+// signed distance to a rounded rectangle centred at (cx, cy), half-sizes hx, hy; > 0 outside
+function rrSdf(px, py, cx, cy, hx, hy, rad) {
+    const qx = Math.abs(px - cx) - (hx - rad), qy = Math.abs(py - cy) - (hy - rad);
+    return Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - rad;
+}
+
 function inside(px, py, W, H, rtl, rtr, rbr, rbl) {
     if (px < 0 || px > W || py < 0 || py > H) return false;
     let cx, cy, r;
@@ -126,43 +155,44 @@ function glass(focus, rad, size) {
     };
 }
 
-// Soft glow behind the focused icon, drawn at its final size (FocusIcon + 2 * HighlightPad) so it is never scaled.
-// The rounded square is the icon's own outline; alpha falls off with the distance outside it.
-function focusGlowBox(w, h, iw, ih, rad) {
-    const hx = iw / 2, hy = ih / 2, reach = (w - iw) / 2, peak = 0.46;
+// Glow behind the selected item, drawn at its final size (item + 2 * pad), so it is never scaled. It is the designer's
+// look: the item's box is filled at 55% of the strength and a blurred copy, spread 0.35 * spread px wider, falls off outside it
+// (a CSS box-shadow of blur 1.6 * spread). White: the dock tints it with the app's colour when it draws it.
+// w x h is the image, iw x ih the item inside it, rad the item's corner radius.
+function glowBox(w, h, iw, ih, rad) {
+    const spread = K.GlowSpread * 0.35, sigma = K.GlowSpread * 1.6 / 2, reach = (w - iw) / 2, peak = K.GlowStrength;
+    const tail = peak * 0.5 * erfc((reach - spread) / (sigma * Math.SQRT2));   // brought down to nothing at the image edge
     return (px, py) => {
-        const qx = Math.abs(px - w / 2) - (hx - rad), qy = Math.abs(py - h / 2) - (hy - rad);
-        const sdf = Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - rad;
-        if (sdf >= reach) return null;
-        const a = peak * Math.pow(1 - Math.max(0, sdf) / reach, 2.3);
-        return a > 0.002 ? [226, 237, 255, a] : null;
+        const sdf = rrSdf(px, py, w / 2, h / 2, iw / 2, ih / 2, rad);
+        if (sdf <= 0) return [255, 255, 255, peak * 0.55];
+        const a = peak * 0.5 * erfc((sdf - spread) / (sigma * Math.SQRT2)) - tail;
+        return a > 0.002 ? [255, 255, 255, a] : null;
     };
 }
 
-function focusGlow(size, icon, rad) {
-    const half = icon / 2, reach = (size - icon) / 2, peak = 0.46;
+// The focus ring: an outline of RingW px around an icon of FocusIcon px, in the icon's own corner radius (a percentage of its side).
+// Drawn at twice the size: the dock scales it to the icon, which is smaller while it grows.
+function ring(scale) {
+    const side = K.FocusIcon * scale, w = (K.FocusIcon + 2 * K.RingW) * scale, rad = K.IconRadiusPct / 100 * side;
+    const col = rgb(K.RingColor);
     return (px, py) => {
-        const qx = Math.abs(px - size / 2) - (half - rad), qy = Math.abs(py - size / 2) - (half - rad);
-        const sdf = Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - rad;   // >0 outside
-        if (sdf >= reach) return null;
-        const t = Math.max(0, sdf) / reach;
-        const a = peak * Math.pow(1 - t, 2.3);
-        return a > 0.002 ? [226, 237, 255, a] : null;
+        const inner = rrSdf(px, py, w / 2, w / 2, side / 2, side / 2, rad);
+        const outer = rrSdf(px, py, w / 2, w / 2, side / 2 + K.RingW * scale, side / 2 + K.RingW * scale, rad + K.RingW * scale);
+        return outer <= 0 && inner > 0 ? [col[0], col[1], col[2], 1] : null;
     };
 }
 
-// Soft drop shadow for the dock pill. The shape edge sits M px inside the asset and has the pill's
-// corner radius, so a 9-slice border of M + RR (66) holds the whole corner curve and the shadow
-// follows the pill instead of showing a squared box. Alpha is 1-minus-smoothstep of the outside distance.
+// Soft drop shadow of the bar. The shape edge sits Margin px inside the asset and has the bar's corner radius, so a
+// 9-slice border of Margin + radius holds the whole corner curve and the shadow follows the bar. The profile is a Gaussian
+// of sigma = blur / 2 (a CSS blur), taken down to zero exactly at the asset edge so the window never cuts it.
 function shadow() {
-    const M = 20, RR = 46, blur = 18, peak = 0.22;
-    const hw = S / 2 - M, hh = S / 2 - M;
+    const M = K.Margin, RR = K.ShellRadius, sigma = K.ShadowBlur / 2, peak = K.ShadowAlpha;
+    const g = d => 0.5 * erfc(d / (sigma * Math.SQRT2));
+    const edge = g(M);
     return (px, py) => {
-        const qx = Math.abs(px - S / 2) - (hw - RR), qy = Math.abs(py - S / 2) - (hh - RR);
-        const sdf = Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - RR; // >0 outside
-        if (sdf >= blur) return null;
-        const t = Math.max(0, Math.min(1, sdf / blur));
-        const a = peak * (1 - t * t * (3 - 2 * t));
+        const sdf = rrSdf(px, py, S / 2, S / 2, S / 2 - M, S / 2 - M, RR);
+        if (sdf >= M) return null;
+        const a = peak * (g(sdf) - edge) / (1 - edge);
         return a > 0.001 ? [0, 0, 0, a] : null;
     };
 }
@@ -181,25 +211,13 @@ function sheet() {
     };
 }
 
-// fully rounded dock pill (the bottom bar background)
+// The bar, in the designer's "solid" style: an opaque tint with a thin light border inside the edge.
 function dock() {
-    const R3 = 46;
+    const R3 = K.ShellRadius, tint = rgb(K.ShellColor), bc = rgb(K.ShellBorderColor);
     return (px, py) => {
         if (!inside(px, py, S, S, R3, R3, R3, R3)) return null;
-        const t = py / S;
-        let col = [0, 0, 0, 0];
-        // thin, cool tint instead of a near-opaque dark slab: the picture behind still reads through
-        col = over(col, [30, 40, 62, 0.50 + 0.14 * t]);
-        // sheen: the upper part of the pane is lit, like light catching glass
-        if (t < 0.55) col = over(col, [255, 255, 255, 0.13 * Math.pow(1 - t / 0.55, 1.6)]);
-        // soft glow gathered along the lower edge
-        if (t > 0.78) col = over(col, [170, 200, 255, 0.07 * ((t - 0.78) / 0.22)]);
-        const d = edgeDist(px, py, S, S, R3, R3, R3, R3);
-        // bright rim, stronger on top where the light comes from
-        if (d < 2.6) col = over(col, [255, 255, 255, (0.30 + 0.30 * (1 - t)) * (1 - d / 2.6)]);
-        // faint inner rim just inside it
-        else if (d < 6) col = over(col, [255, 255, 255, 0.05 * (1 - (d - 2.6) / 3.4)]);
-        if (py < 10) col = over(col, [255, 255, 255, 0.16 * (1 - py / 10)]);
+        let col = [tint[0], tint[1], tint[2], K.ShellAlpha];
+        if (edgeDist(px, py, S, S, R3, R3, R3, R3) < K.ShellBorderW) col = over(col, [bc[0], bc[1], bc[2], K.ShellBorderAlpha]);
         return col;
     };
 }
@@ -227,27 +245,16 @@ function chevron(dir) {
 renderPng('chev_up', 24, 24, [0, 0, 0, 0], chevron(-1));
 renderPng('chev_down', 24, 24, [0, 0, 0, 0], chevron(1));
 
-renderPng('glass_tile', S, S, [R, R, R, R], glass(false));
-renderPng('glass_tile_focus', S, S, [R, R, R, R], glass(true));
+// Fallback tile for an app whose icon is missing: the same corner radius as every icon.
+renderPng('glass_tile', S, S, [0, 0, 0, 0], glass(false, Math.round(K.IconRadiusPct / 100 * S)));
 renderPng('shadow', S, S, [0, 0, 0, 0], shadow());
-renderPng('sheet_bg', S, S, [46, 46, 0, 0], sheet());
-renderPng('dock_glow', 180, 180, [0, 0, 0, 0], focusGlow(180, 132, 30));   // 180 = FocusIcon + 2 * HighlightPad
-renderPng('dock_glow_pill', 264, 80, [0, 0, 0, 0], focusGlowBox(264, 80, 232, 48, 24));   // pinned pills: FocusIcon-like final size, capsule outline
-renderPng('dock_bg', S, S, [46, 46, 46, 46], dock());
-
-// soft radial glow for the focused item
-renderPng('glow', S, S, [0, 0, 0, 0],
-    (px, py) => {
-        const cx = px - S / 2, cy = py - S / 2;
-        const r = Math.sqrt(cx * cx + cy * cy) / (S / 2);
-        if (r >= 1) return null;
-        const a = (1 - r) * (1 - r) * 0.82;
-        return [178, 205, 255, a];
-    });
-
-// white squircle alpha mask for rounding the app icons
 {
-    const R2 = 58;
-    renderPng('mask', S, S, [R2, R2, R2, R2],
-        (px, py) => inside(px, py, S, S, R2, R2, R2, R2) ? [255, 255, 255, 1] : null);
+    const pad = K.HighlightPad, side = K.FocusIcon, rad = K.IconRadiusPct / 100 * side;
+    renderPng('dock_glow', side + 2 * pad, side + 2 * pad, [0, 0, 0, 0], glowBox(side + 2 * pad, side + 2 * pad, side, side, rad));
+    const pp = K.PillGlowPad;
+    renderPng('dock_glow_pill', K.PillItemW + 2 * pp, K.PillItemH + 2 * pp, [0, 0, 0, 0],
+        glowBox(K.PillItemW + 2 * pp, K.PillItemH + 2 * pp, K.PillItemW, K.PillItemH, K.PillItemH / 2));   // pinned pills: a capsule
+    const rs = (K.FocusIcon + 2 * K.RingW) * 2;
+    renderPng('dock_ring', rs, rs, [0, 0, 0, 0], ring(2));
 }
+renderPng('dock_bg', S, S, [0, 0, 0, 0], dock());

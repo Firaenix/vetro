@@ -17,7 +17,9 @@ namespace Launcher.Core
     /// </summary>
     internal sealed class Controller
     {
-        public const double ShowSeconds = 0.24;
+        /// <summary>The bar fades in over this long; each item then takes the same time, starting <see cref="StaggerSeconds"/> after the one before (a cascade).</summary>
+        public const double ShowSeconds = Design.EnterSeconds;
+        public const double StaggerSeconds = Design.StaggerSeconds;
         public const double HideSeconds = 0.16;
         public const double IdleHideSeconds = 20.0;
         // The focus follows its target like a critically damped spring: it starts gently, never overshoots
@@ -26,6 +28,15 @@ namespace Launcher.Core
         private const float Epsilon = 0.002f;   // focus units (a quarter of a pixel at most)
         private const float RestSpeed = 0.05f;  // focus units per second
         private float _vel;
+        // Linear motion: like a CSS transition, every new target restarts a fixed-time run from where the focus is.
+        private float _from;
+        private double _runT;
+        // Seconds since the cascade started, and whether the cascade applies (it does not when a page opens inside a visible dock).
+        private double _enter;
+        private bool _cascade;
+
+        /// <summary>True: the selection moves at constant speed over <see cref="Design.FocusSeconds"/>; false: the damped spring.</summary>
+        public bool Linear { get; set; }
 
         private readonly DockLayout _layout;
 
@@ -41,6 +52,7 @@ namespace Launcher.Core
         public void HoldFaint(float presence)
         {
             Presence = presence < 0f ? 0f : (presence > 0.05f ? 0.05f : presence);
+            _cascade = false; _enter = CascadeSeconds;   // every item at the bar's own opacity, or the warm-up would draw nothing
         }
 
         /// <summary>Back to the hidden, focus-on-first state (used after the start-up warm-up pass).</summary>
@@ -51,6 +63,8 @@ namespace Launcher.Core
             FocusTarget = 0;
             FocusPos = 0f;
             _vel = 0f;
+            _from = 0f; _runT = 0;
+            _cascade = false; _enter = 0;
             Scroll = _layout.ScrollFor(0f);
         }
         public int FocusTarget { get; private set; }
@@ -66,6 +80,7 @@ namespace Launcher.Core
             _layout = layout;
             Kind = kind;
             Phase = Phase.Hidden;
+            Linear = Design.LinearMotion;
             Scroll = layout.ScrollFor(0f);
         }
 
@@ -73,19 +88,38 @@ namespace Launcher.Core
 
         public bool IsActive { get { return Phase == Phase.Shown || Phase == Phase.Showing; } }
 
-        /// <summary>Vertical offset of everything inside the window, in pixels (0 when fully shown).</summary>
-        public int Slide { get { return (int)Math.Round((1f - Ease(Presence)) * DockLayout.SlideDistance); } }
+        /// <summary>Seconds the whole entrance lasts: the bar's fade plus the delay of the last item.</summary>
+        private double CascadeSeconds { get { return ShowSeconds + (_layout.Count - 1) * StaggerSeconds; } }
+
+        /// <summary>
+        /// Vertical offset of the bar, shadow and divider, in pixels (0 when fully shown). While the cascade runs they
+        /// only fade; the items rise one after the other (<see cref="ItemSlide"/>).
+        /// </summary>
+        public int Slide { get { return _cascade && Phase == Phase.Showing ? 0 : (int)Math.Round((1f - Ease(Presence)) * DockLayout.SlideDistance); } }
+
+        /// <summary>0..1: how far item <paramref name="i"/> has come in. It follows the bar's own presence once the cascade is over (and when hiding).</summary>
+        public float ItemPresence(int i)
+        {
+            double t = (_enter - i * StaggerSeconds) / ShowSeconds;
+            float c = t <= 0 ? 0f : (t >= 1 ? 1f : (float)t);
+            return Math.Min(Presence, c);
+        }
+
+        public int ItemSlide(int i) { return (int)Math.Round((1f - Ease(ItemPresence(i))) * DockLayout.SlideDistance); }
 
         public static float Ease(float t)
         {
             float u = 1f - (t < 0f ? 0f : (t > 1f ? 1f : t));
-            return 1f - u * u * u;
+            return Design.LinearMotion ? 1f - u : 1f - u * u * u;
         }
 
         /// <summary>Returns true when the phase changed.</summary>
         public bool Show()
         {
             if (Phase == Phase.Shown || Phase == Phase.Showing) return false;
+            // From hidden the items cascade in; turning back from a half-finished hide there is nothing left to stagger.
+            _cascade = Phase == Phase.Hidden;
+            _enter = _cascade ? 0 : CascadeSeconds;
             Phase = Phase.Showing;
             return true;
         }
@@ -108,6 +142,7 @@ namespace Launcher.Core
         {
             Phase = from.Phase;
             Presence = from.Presence;
+            _cascade = false; _enter = CascadeSeconds;
             if (Phase == Phase.Shown || Phase == Phase.Showing)
             {
                 if (Presence > pop) Presence = pop;
@@ -125,6 +160,7 @@ namespace Launcher.Core
             FocusTarget = index;
             FocusPos = index;
             _vel = 0f;
+            _from = index; _runT = 0;
             Scroll = _layout.ScrollFor(FocusPos);
         }
 
@@ -172,6 +208,7 @@ namespace Launcher.Core
             if (index >= _layout.Count) index = _layout.Count - 1;
             if (index == FocusTarget) return KeyAction.None;
             FocusTarget = index;
+            _from = FocusPos; _runT = 0;   // a new run for the linear motion, starting wherever the focus is now
             return KeyAction.Moved;
         }
 
@@ -185,7 +222,9 @@ namespace Launcher.Core
             {
                 case Phase.Showing:
                     Presence += (float)(dt / ShowSeconds);
-                    if (Presence >= 1f) { Presence = 1f; Phase = Phase.Shown; }
+                    if (Presence > 1f) Presence = 1f;
+                    if (_enter < CascadeSeconds) { _enter += dt; if (_enter > CascadeSeconds) _enter = CascadeSeconds; }
+                    if (Presence >= 1f && _enter >= CascadeSeconds) Phase = Phase.Shown;
                     break;
                 case Phase.Hiding:
                     Presence -= (float)(dt / HideSeconds);
@@ -194,7 +233,16 @@ namespace Launcher.Core
             }
 
             float x = FocusPos - FocusTarget;
-            if (x != 0f || _vel != 0f)
+            if (Linear)
+            {
+                if (x != 0f)
+                {
+                    _runT += dt;
+                    float u = (float)(_runT / Design.FocusSeconds);
+                    FocusPos = u >= 1f ? FocusTarget : _from + (FocusTarget - _from) * u;
+                }
+            }
+            else if (x != 0f || _vel != 0f)
             {
                 float e = (float)Math.Exp(-Omega * dt);
                 float t = _vel + Omega * x;

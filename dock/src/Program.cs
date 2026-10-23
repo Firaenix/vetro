@@ -801,7 +801,7 @@ namespace Launcher
                 string res = Path.Combine(AppContext.BaseDirectory, "res");
                 string dumpIcons = Arg(args, "--dump-icons");
                 if (dumpIcons != null && Directory.Exists(dumpIcons)) Dock.DumpIconsTo = dumpIcons;
-                _appsDock = new Dock(_win, layout, _apps, res, Log, "Input", true);
+                _appsDock = new Dock(_win, layout, _apps, res, Log, Design.HintText, true);
                 _appsDock.Build();
                 _inputsDock = new Dock(_win, inputsLayout, _inputs, res, Log, "Back", false);
                 _inputsDock.Build();

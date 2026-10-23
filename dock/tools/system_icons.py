@@ -18,7 +18,9 @@ SIZE = 128            # design grid: every coordinate below is on this grid, dra
 import layout_consts
 OUT = layout_consts.FOCUS_ICON   # final size, read from Layout.cs
 SS = 4
-CORNER = 29
+# Corner radius on the 128 grid: the same percentage of the side as every other icon, ring and glow (Design.IconRadiusPct).
+CORNER = layout_consts.design_num("IconRadiusPct") / 100.0 * SIZE
+RIM_ALPHA = int(round(255 * layout_consts.design_num("IconRimAlpha")))
 
 # slug -> (label, target, fallback app or None, accent)
 SYSTEM = {
@@ -46,7 +48,7 @@ def _tile(accent):
     base = Image.alpha_composite(base, glow)
     # rim
     rim = Image.new("RGBA", (big, big), (0, 0, 0, 0))
-    ImageDraw.Draw(rim).rounded_rectangle((0, 0, big - 1, big - 1), radius=CORNER * SS, outline=(255, 255, 255, 64), width=2 * SS)
+    ImageDraw.Draw(rim).rounded_rectangle((0, 0, big - 1, big - 1), radius=CORNER * SS, outline=(255, 255, 255, RIM_ALPHA), width=max(1, round(SIZE / OUT * SS)))   # one pixel at the size it is drawn
     base = Image.alpha_composite(base, rim)
     base.putalpha(ImageChops.multiply(base.getchannel("A"), mask))
     return base
@@ -118,6 +120,7 @@ def _phosphor(name, box):
 
 
 # The line glyphs above stay as a fallback; the shipped look uses Phosphor bold so all three share one hand.
+GLYPH_HEIGHT = {"settings": 23, "samsunghome": 16}
 GLYPHS = {"settings": _phosphor("gear-six-bold", 62), "samsunghome": _glyph_back}
 
 
@@ -202,23 +205,14 @@ PILL_W, PILL_H = layout_consts.layout_int("PillItemW"), layout_consts.layout_int
 
 
 def _pill(w, h):
-    """Frosted oval: the round control's look stretched into a capsule."""
+    """Outline oval: nothing inside, a thin light line round the capsule (the designer's "outline" style). The glow behind a
+    selected pill shows through it."""
     big_w, big_h = w * SS, h * SS
     mask = Image.new("L", (big_w, big_h), 0)
     ImageDraw.Draw(mask).rounded_rectangle((0, 0, big_w - 1, big_h - 1), radius=big_h // 2, fill=255)
     base = Image.new("RGBA", (big_w, big_h), (0, 0, 0, 0))
-    px = base.load()
-    for y in range(big_h):
-        a = int(52 - 26 * y / (big_h - 1))
-        for x in range(big_w):
-            px[x, y] = (214, 224, 244, a)
-    light = Image.new("RGBA", (big_w, big_h), (0, 0, 0, 0))
-    ImageDraw.Draw(light).ellipse((-big_w * 0.05, -big_h * 0.9, big_w * 0.55, big_h * 0.5), fill=(255, 255, 255, 50))
-    light = light.filter(ImageFilter.GaussianBlur(big_h * 0.12))
-    base = Image.alpha_composite(base, light)
-    rim = Image.new("RGBA", (big_w, big_h), (0, 0, 0, 0))
-    ImageDraw.Draw(rim).rounded_rectangle((0, 0, big_w - 1, big_h - 1), radius=big_h // 2, outline=(255, 255, 255, 120), width=2 * SS)
-    base = Image.alpha_composite(base, rim)
+    ImageDraw.Draw(base).rounded_rectangle((0, 0, big_w - 1, big_h - 1), radius=big_h // 2,
+                                           outline=(255, 255, 255, int(round(255 * layout_consts.design_num("PillBorderAlpha")))), width=2 * SS)
     base.putalpha(ImageChops.multiply(base.getchannel("A"), mask))
     return base
 
@@ -239,13 +233,14 @@ def render(slug, path):
     label = SYSTEM[slug][0]
     tile = _pill(PILL_W, PILL_H)
     layer = Image.new("RGBA", (SIZE * SS, SIZE * SS), (0, 0, 0, 0))
-    extra = GLYPHS[slug](ImageDraw.Draw(layer), (255, 255, 255, 245), None)
+    extra = GLYPHS[slug](ImageDraw.Draw(layer), (255, 255, 255, 255), None)
     if extra and extra[0] == "image":
         layer = extra[1]
     g = layer.crop(layer.getchannel("A").getbbox())
-    gh = 26 * SS
+    # The designer draws each glyph in a 26 px box of a 256 grid, where the gear fills 89% and the back arrow about 60% of it.
+    gh = round(GLYPH_HEIGHT[slug] * SS)
     g = g.resize((max(1, round(g.width * gh / g.height)), gh), Image.LANCZOS)
-    font = _pill_font(22 * SS)
+    font = _pill_font(int(layout_consts.design_num("PillTextSize")) * SS)
     probe = ImageDraw.Draw(Image.new("RGBA", (8, 8)))
     tb = probe.textbbox((0, 0), label, font=font)
     tw, th = tb[2] - tb[0], tb[3] - tb[1]
@@ -255,10 +250,8 @@ def render(slug, path):
     out = tile.copy()
     out.alpha_composite(g, (x0, (tile.height - g.height) // 2))
     text = Image.new("RGBA", tile.size, (0, 0, 0, 0))
-    ImageDraw.Draw(text).text((x0 + g.width + gap - tb[0], (tile.height - th) // 2 - tb[1]), label, font=font, fill=(255, 255, 255, 245))
-    shadow = text.filter(ImageFilter.GaussianBlur(2 * SS))
-    shadow = Image.merge("RGBA", (Image.new("L", tile.size, 0),) * 3 + (shadow.getchannel("A").point(lambda v: int(v * 0.5)),))
-    out = Image.alpha_composite(Image.alpha_composite(out, shadow), text)
+    ImageDraw.Draw(text).text((x0 + g.width + gap - tb[0], (tile.height - th) // 2 - tb[1]), label, font=font, fill=(255, 255, 255, 255))
+    out = Image.alpha_composite(out, text)   # no shadow: the pill sits on the opaque bar
     out = out.resize((PILL_W, PILL_H), Image.LANCZOS)
     os.makedirs(os.path.dirname(path), exist_ok=True)
     out.save(path)
