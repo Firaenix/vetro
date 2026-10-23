@@ -80,7 +80,7 @@ const tick = () => new Promise(r => setImmediate(r));
     assert.match(page, /class="lp-pill"/);
     assert.equal((page.match(/\/dock\/icon\?slug=/g) || []).length, 3);
     assert.match(page, /src="\/dock\/icon\?slug=netflix"/);
-    assert.match(page, /<i class="lp-divider"><\/i>[^]*lp-round[^]*slug=settings/, 'Settings is a round control after the divider');
+    assert.match(page, /<i class="lp-divider"><\/i>[^]*lp-oval[^]*slug=settings/, 'Settings is an oval pill after the divider');
     assert.match(page, /<div class="lp-label"><span>Netflix<\/span>/, 'the first app is selected');
     assert.match(page, /Input/);
     assert.match(sandbox.operationEntries[0].message, /Launcher on and running\. Press Home on the remote to open it\./, 'recorded in Actions');

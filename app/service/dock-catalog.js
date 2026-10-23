@@ -30,12 +30,12 @@ var LIVE = {
     RF: {slug: 'livetv', label: 'Live TV', iconPackage: null}
 };
 
-// Source and Settings close the row, as they do in Samsung's Home. Settings sends the System Menu key, which
-// the TV routes to Samsung's own menu app (org.tizen.menu, menu.json); starting csfs would only show Home.
+// Two pills close the row. Settings sends the System Menu key, which the TV routes to Samsung's own menu app
+// (org.tizen.menu, menu.json); starting csfs would only show Home. The second one goes back to Samsung's Home.
+// The input list is not here: it is one page up in the launcher.
 var SYSTEM_ROWS = [
-    'source\tSource\tpanel:inputs',
     'settings\tSettings\tkey:XF86SysMenu\torg.tizen.menu',
-    'samsunghome\tBack to Samsung Home\tsys:com.samsung.tv.csfs'
+    'samsunghome\tSamsung Home\tsys:com.samsung.tv.csfs'
 ];
 
 function script() {

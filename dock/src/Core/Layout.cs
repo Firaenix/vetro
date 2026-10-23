@@ -37,6 +37,10 @@ namespace Launcher.Core
         /// <summary>Space between the scrolling apps and the pinned system entries; the divider sits in its middle.</summary>
         public const int GroupGap = 56;
         public const int Pitch = Icon + Gap;
+        /// <summary>The pinned system entries are oval pills (icon and name drawn into one image) of this fixed size.</summary>
+        public const int PillItemW = 304;
+        public const int PillItemH = 72;
+        public const int PillItemGap = 16;
         /// <summary>Smallest space kept between the label and the clock; with less, the clock is not drawn.</summary>
         public const int ClockGap = 16;
         // Room for the navigation hint ("Input" above the apps, "Back" below the inputs): HintH is the
@@ -85,7 +89,7 @@ namespace Launcher.Core
             AppCount = GroupStart < 0 ? count : GroupStart;
             PinnedCount = count - AppCount;
             AppsW = AppCount * Icon + (AppCount - 1) * Gap;
-            PinnedW = PinnedCount == 0 ? 0 : PinnedCount * Icon + (PinnedCount - 1) * Gap;
+            PinnedW = PinnedCount == 0 ? 0 : PinnedCount * PillItemW + (PinnedCount - 1) * PillItemGap;
             int fixedW = PinnedCount == 0 ? 0 : GroupGap + PinnedW;
             ContentW = AppsW + fixedW;
             int maxPill = screenW - 2 * Margin - 2 * ScreenSideGap;
@@ -115,7 +119,7 @@ namespace Launcher.Core
         /// </summary>
         public float ItemCenter(int i, float scroll)
         {
-            if (GroupStart >= 0 && i >= GroupStart) return ViewportW + GroupGap + Icon / 2f + (i - GroupStart) * Pitch;
+            if (GroupStart >= 0 && i >= GroupStart) return ViewportW + GroupGap + PillItemW / 2f + (i - GroupStart) * (PillItemW + PillItemGap);
             return CenterOf(i) - scroll;
         }
 
@@ -146,6 +150,15 @@ namespace Launcher.Core
 
         public Box IconBox(int i, float focusPos, float scroll, int slide)
         {
+            if (IsPinned(i))
+            {
+                // A pill does not grow; the glow behind it says it is focused.
+                Box p;
+                p.W = PillItemW; p.H = PillItemH;
+                p.X = (int)Math.Round(Left + PadX + ItemCenter(i, scroll)) - PillItemW / 2;
+                p.Y = RowCenterY - PillItemH / 2 + slide;
+                return p;
+            }
             float amount = Amount(focusPos, i);
             // Even sizes only: an odd size would put the centre half a pixel off and the icon would wobble
             // sideways while it grows. FocusIcon - Icon is even (checked by the tests).
@@ -171,18 +184,19 @@ namespace Launcher.Core
             weightSecond = second == first ? 0f : p - first;
         }
 
-        /// <summary>True for the pinned system entries after the divider (round controls).</summary>
+        /// <summary>True for the pinned system entries after the divider (the oval pills).</summary>
         public bool IsPinned(int i) { return GroupStart >= 0 && i >= GroupStart; }
 
         /// <summary>Box of the glow around item <paramref name="i"/> (its final size; only its opacity changes).</summary>
         public Box GlowBox(int i, float scroll, int slide)
         {
-            int size = FocusIcon + 2 * HighlightPad;
+            int w = IsPinned(i) ? PillItemW + 2 * HighlightPad : FocusIcon + 2 * HighlightPad;
+            int h = IsPinned(i) ? PillItemH + 2 * HighlightPad : w;
             int cx = (int)Math.Round(Left + PadX + ItemCenter(i, scroll));
             Box b;
-            b.W = size; b.H = size;
-            b.X = cx - size / 2;
-            b.Y = RowCenterY - size / 2 + slide;
+            b.W = w; b.H = h;
+            b.X = cx - w / 2;
+            b.Y = RowCenterY - h / 2 + slide;
             return b;
         }
 

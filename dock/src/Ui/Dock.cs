@@ -201,7 +201,7 @@ namespace Launcher.Ui
         {
             if (round == wantRound) return;
             round = wantRound;
-            Efl.evas_object_image_file_set(img, Path.Combine(_assets, (round ? "dock_glow_round" : "dock_glow") + ".png"), null);
+            Efl.evas_object_image_file_set(img, Path.Combine(_assets, (round ? "dock_glow_pill" : "dock_glow") + ".png"), null);
         }
 
         private IntPtr NineSlice(string name, int border) { return NineSlice(name, border, border, border, border); }
@@ -349,7 +349,7 @@ namespace Launcher.Ui
             // reached (two objects, one per icon), following the same eased focus as the icon growth.
             int g1, g2; float w2;
             _layout.GlowAt(fp, out g1, out g2, out w2);
-            // The pinned system entries are round controls: their glow follows a circle, not the apps' rounded square.
+            // The pinned system entries are oval pills: their glow follows a capsule, not the apps' rounded square.
             GlowShape(_highlight, ref _hlRound, g1 >= 0 && _layout.IsPinned(g1));
             GlowShape(_highlight2, ref _hlRound2, g2 >= 0 && _layout.IsPinned(g2));
             Place(_highlight, ref _hlBox, _layout.GlowBox(g1, scroll, slide));
@@ -436,7 +436,8 @@ namespace Launcher.Ui
                 int idx = _fader.Index[k];
                 if ((_fader.Dirty & (1 << k)) != 0 && idx >= 0)
                 {
-                    string text = idx == _current ? _items[idx].Label + "  \u00b7  current" : _items[idx].Label;
+                    // A pill carries its own name; nothing is written under it.
+                    string text = _layout.IsPinned(idx) ? "" : idx == _current ? _items[idx].Label + "  \u00b7  current" : _items[idx].Label;
                     Efl.evas_object_text_text_set(_label[k], text);
                     _labelW[k] = Efl.evas_object_text_horiz_advance_get(_label[k]);
                     _labelX[k] = int.MinValue;   // placed again below

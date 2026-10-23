@@ -709,11 +709,11 @@ namespace Launcher.Tests
 
             T.Run("layout: divider sits in the gap before the first system entry", () =>
             {
-                var l = new DockLayout(13, 1920, 1080, 0, false, 11);
-                T.Eq(l.GroupStart, 11, "group start kept");
+                var l = new DockLayout(10, 1920, 1080, 0, false, 8);
+                T.Eq(l.GroupStart, 8, "group start kept");
                 var d = l.DividerBox(l.ScrollFor(0f), 0);
-                var left = l.IconBox(10, 0f, 0f, 0);       // neither focused: plain 104 px icons
-                var right = l.IconBox(11, 0f, 0f, 0);
+                var left = l.IconBox(7, 0f, 0f, 0);        // neither focused: plain 104 px icons
+                var right = l.IconBox(8, 0f, 0f, 0);
                 int gapL = left.X + left.W, gapR = right.X;
                 T.True(d.X >= gapL && d.X + d.W <= gapR, "divider inside the gap: " + d.X + ".." + (d.X + d.W) + " vs " + gapL + ".." + gapR);
                 T.True(Math.Abs((d.X + d.W / 2.0) - (gapL + gapR) / 2.0) <= 1.0, "divider centred in the gap");
@@ -725,7 +725,9 @@ namespace Launcher.Tests
                 T.Eq(new DockLayout(5, 1920, 1080, 0, false, 0).GroupStart, -1, "group at 0 is no group");
                 T.Eq(new DockLayout(5, 1920, 1080, 0, false, 5).GroupStart, -1, "group at count is no group");
                 T.Eq(new DockLayout(5, 1920, 1080, 0, false, -3).GroupStart, -1, "negative is no group");
-                T.True(!l.IsPinned(10) && l.IsPinned(11) && l.IsPinned(12), "the system entries after the divider are the round ones");
+                T.True(!l.IsPinned(7) && l.IsPinned(8) && l.IsPinned(9), "the system entries after the divider are the pills");
+                T.Eq(l.IconBox(8, 8f, 0f, 0).W, DockLayout.PillItemW, "a focused pill does not grow");
+                T.Eq(l.GlowBox(8, 0f, 0).W, DockLayout.PillItemW + 2 * DockLayout.HighlightPad, "its glow is the capsule size");
                 T.True(!new DockLayout(5, 1920, 1080, 0, true, -1).IsPinned(4), "no group, nothing is round");
             });
 
@@ -761,8 +763,8 @@ namespace Launcher.Tests
                 }
                 var d = l.DividerBox(0f, 0);
                 T.True(d.X >= l.ViewRight + DockLayout.ClipPad && d.X + d.W <= rest[0].X, "divider between the clipper and the pinned entries");
-                var fit = new DockLayout(13, 1920, 1080, 0, false, 11);
-                T.True(!fit.Scrolls, "13 entries with a group still fit");
+                var fit = new DockLayout(10, 1920, 1080, 0, false, 8);
+                T.True(!fit.Scrolls, "8 apps and 2 pills still fit");
                 T.Eq(fit.ViewportW, fit.AppsW, "apps viewport equals the apps when they fit");
             });
 

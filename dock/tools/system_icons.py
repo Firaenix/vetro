@@ -22,9 +22,8 @@ CORNER = 29
 
 # slug -> (label, target, fallback app or None, accent)
 SYSTEM = {
-    "source": ("Source", "panel:inputs", None, (90, 169, 255)),
     "settings": ("Settings", "key:XF86SysMenu", "org.tizen.menu", (196, 204, 220)),
-    "samsunghome": ("Back to Samsung Home", "sys:com.samsung.tv.csfs", None, (196, 204, 220)),
+    "samsunghome": ("Samsung Home", "sys:com.samsung.tv.csfs", None, (196, 204, 220)),
 }
 
 
@@ -119,7 +118,7 @@ def _phosphor(name, box):
 
 
 # The line glyphs above stay as a fallback; the shipped look uses Phosphor bold so all three share one hand.
-GLYPHS = {"source": _phosphor("sign-in-bold", 58), "settings": _phosphor("gear-six-bold", 62), "samsunghome": _glyph_back}
+GLYPHS = {"settings": _phosphor("gear-six-bold", 62), "samsunghome": _glyph_back}
 
 
 # The inputs panel: slug -> (label, Samsung SourceType, accent). TV is 0, HDMI 1-4 are 13-16.
@@ -199,8 +198,70 @@ def _control():
     return base
 
 
+PILL_W, PILL_H = layout_consts.layout_int("PillItemW"), layout_consts.layout_int("PillItemH")
+
+
+def _pill(w, h):
+    """Frosted oval: the round control's look stretched into a capsule."""
+    big_w, big_h = w * SS, h * SS
+    mask = Image.new("L", (big_w, big_h), 0)
+    ImageDraw.Draw(mask).rounded_rectangle((0, 0, big_w - 1, big_h - 1), radius=big_h // 2, fill=255)
+    base = Image.new("RGBA", (big_w, big_h), (0, 0, 0, 0))
+    px = base.load()
+    for y in range(big_h):
+        a = int(52 - 26 * y / (big_h - 1))
+        for x in range(big_w):
+            px[x, y] = (214, 224, 244, a)
+    light = Image.new("RGBA", (big_w, big_h), (0, 0, 0, 0))
+    ImageDraw.Draw(light).ellipse((-big_w * 0.05, -big_h * 0.9, big_w * 0.55, big_h * 0.5), fill=(255, 255, 255, 50))
+    light = light.filter(ImageFilter.GaussianBlur(big_h * 0.12))
+    base = Image.alpha_composite(base, light)
+    rim = Image.new("RGBA", (big_w, big_h), (0, 0, 0, 0))
+    ImageDraw.Draw(rim).rounded_rectangle((0, 0, big_w - 1, big_h - 1), radius=big_h // 2, outline=(255, 255, 255, 120), width=2 * SS)
+    base = Image.alpha_composite(base, rim)
+    base.putalpha(ImageChops.multiply(base.getchannel("A"), mask))
+    return base
+
+
+def _pill_font(size):
+    for path, index in (("/System/Library/Fonts/Helvetica.ttc", 1), ("/System/Library/Fonts/SFNS.ttf", 0),
+                        ("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 0)):
+        if os.path.isfile(path):
+            try:
+                return ImageFont.truetype(path, size, index=index)
+            except OSError:
+                pass
+    return ImageFont.load_default(size)
+
+
 def render(slug, path):
-    _render(None, GLYPHS[slug], path, round_control=True)
+    """A pinned system entry: an oval pill with the glyph and the name inside, drawn at its final size."""
+    label = SYSTEM[slug][0]
+    tile = _pill(PILL_W, PILL_H)
+    layer = Image.new("RGBA", (SIZE * SS, SIZE * SS), (0, 0, 0, 0))
+    extra = GLYPHS[slug](ImageDraw.Draw(layer), (255, 255, 255, 245), None)
+    if extra and extra[0] == "image":
+        layer = extra[1]
+    g = layer.crop(layer.getchannel("A").getbbox())
+    gh = 32 * SS
+    g = g.resize((max(1, round(g.width * gh / g.height)), gh), Image.LANCZOS)
+    font = _pill_font(26 * SS)
+    probe = ImageDraw.Draw(Image.new("RGBA", (8, 8)))
+    tb = probe.textbbox((0, 0), label, font=font)
+    tw, th = tb[2] - tb[0], tb[3] - tb[1]
+    gap = 12 * SS
+    total = g.width + gap + tw
+    x0 = (tile.width - total) // 2
+    out = tile.copy()
+    out.alpha_composite(g, (x0, (tile.height - g.height) // 2))
+    text = Image.new("RGBA", tile.size, (0, 0, 0, 0))
+    ImageDraw.Draw(text).text((x0 + g.width + gap - tb[0], (tile.height - th) // 2 - tb[1]), label, font=font, fill=(255, 255, 255, 245))
+    shadow = text.filter(ImageFilter.GaussianBlur(2 * SS))
+    shadow = Image.merge("RGBA", (Image.new("L", tile.size, 0),) * 3 + (shadow.getchannel("A").point(lambda v: int(v * 0.5)),))
+    out = Image.alpha_composite(Image.alpha_composite(out, shadow), text)
+    out = out.resize((PILL_W, PILL_H), Image.LANCZOS)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    out.save(path)
 
 
 def _render(accent, glyph, path, round_control=False):

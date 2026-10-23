@@ -669,6 +669,13 @@ namespace Launcher
                     Log("launch " + e.AppId + " after closing " + e.KillFirst + " rc=" + rc);
                     return;
                 }
+                if (e.AppId == "com.samsung.tv.csfs")
+                {
+                    // Samsung's Home ignores a plain app-control request from here (logged as launched, never shown);
+                    // the platform's own launcher starts it.
+                    Log("launch " + e.AppId + " rc=" + Libc.system("/usr/bin/app_launcher -s " + e.AppId + " >/dev/null 2>&1 &"));
+                    return;
+                }
                 if (SendLaunch(e.AppId)) { Log("launch " + e.AppId); return; }
                 Log("launch failed: " + e.AppId);
                 if (e.FallbackAppId != null && SendLaunch(e.FallbackAppId)) { Log("launch " + e.FallbackAppId + " (fallback)"); return; }

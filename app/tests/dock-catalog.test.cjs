@@ -43,7 +43,7 @@ const lines = text.trim().split('\n');
 assert.ok(lines[0].startsWith('#'));
 assert.equal(lines[1], 'tvplus\tSamsung TV Plus\torg.tizen.tv-viewer\t\t/opt/usr/apps/com.samsung.tv.tvplus/shared/res/tvplus.png');
 assert.equal(lines[2], 'livetv\tLive TV\torg.tizen.tv-viewer', 'no icon: no trailing tabs');
-assert.deepEqual(lines.slice(-3), ['source\tSource\tpanel:inputs', 'settings\tSettings\tkey:XF86SysMenu\torg.tizen.menu', 'samsunghome\tBack to Samsung Home\tsys:com.samsung.tv.csfs'], 'Source, Settings (the System Menu key) and Back to Samsung Home close the row');
+assert.deepEqual(lines.slice(-2), ['settings\tSettings\tkey:XF86SysMenu\torg.tizen.menu', 'samsunghome\tSamsung Home\tsys:com.samsung.tv.csfs'], 'two pills close the row: Settings (the System Menu key) and Samsung Home');
 lines.slice(1).forEach(l => assert.ok(l.split('\t').length >= 3, 'every line has slug, label and app id: ' + l));
 
 // Names that would break the file or the dock
@@ -61,8 +61,8 @@ assert.equal(badId.entries.length, 0, 'an app id that is not plain is never writ
 const many = {order: [], registry: {}, icons: {}, packageIcons: {}};
 for (let i = 0; i < 60; i++) { many.order.push('d/webapp@a' + i); many.registry['a' + i] = {title: 'App ' + i, appId: 'x.app' + i, hidden: false}; }
 const capped = catalog.build(many);
-assert.equal(capped.entries.length, 37);
-assert.equal(capped.skipped.length, 23);
+assert.equal(capped.entries.length, 38);
+assert.equal(capped.skipped.length, 22);
 
 // Fix TizenTube: YouTube's icon, and Samsung's YouTube closed first
 const tt = {order: ['d/webapp@tt', 'd/webapp@aaa'], icons: {tt: '/opt/share/webappservice/apps_icon/all/tt/icon.png', yt: '/opt/share/webappservice/apps_icon/all/yt/224x224.png', aaa: '/opt/share/webappservice/apps_icon/all/aaa/224x224.png'}, packageIcons: {},

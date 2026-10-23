@@ -128,6 +128,17 @@ function glass(focus, rad, size) {
 
 // Soft glow behind the focused icon, drawn at its final size (FocusIcon + 2 * HighlightPad) so it is never scaled.
 // The rounded square is the icon's own outline; alpha falls off with the distance outside it.
+function focusGlowBox(w, h, iw, ih, rad) {
+    const hx = iw / 2, hy = ih / 2, reach = (w - iw) / 2, peak = 0.46;
+    return (px, py) => {
+        const qx = Math.abs(px - w / 2) - (hx - rad), qy = Math.abs(py - h / 2) - (hy - rad);
+        const sdf = Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - rad;
+        if (sdf >= reach) return null;
+        const a = peak * Math.pow(1 - Math.max(0, sdf) / reach, 2.3);
+        return a > 0.002 ? [226, 237, 255, a] : null;
+    };
+}
+
 function focusGlow(size, icon, rad) {
     const half = icon / 2, reach = (size - icon) / 2, peak = 0.46;
     return (px, py) => {
@@ -221,7 +232,7 @@ renderPng('glass_tile_focus', S, S, [R, R, R, R], glass(true));
 renderPng('shadow', S, S, [0, 0, 0, 0], shadow());
 renderPng('sheet_bg', S, S, [46, 46, 0, 0], sheet());
 renderPng('dock_glow', 180, 180, [0, 0, 0, 0], focusGlow(180, 132, 30));   // 180 = FocusIcon + 2 * HighlightPad
-renderPng('dock_glow_round', 180, 180, [0, 0, 0, 0], focusGlow(180, 132, 66));   // round controls: the outline is a circle
+renderPng('dock_glow_pill', 352, 120, [0, 0, 0, 0], focusGlowBox(352, 120, 304, 72, 36));   // pinned pills: FocusIcon-like final size, capsule outline
 renderPng('dock_bg', S, S, [46, 46, 46, 46], dock());
 
 // soft radial glow for the focused item
