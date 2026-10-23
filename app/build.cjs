@@ -3,8 +3,21 @@
 const fs = require('fs');
 const path = require('path');
 const crc32 = require('./service/package-info.js').crc32;
+// The dock's images live with its sources in ../dock/res and are packaged under native/dock/res.
+function dockResources() {
+    const root = path.join(__dirname, '..', 'dock', 'res'), found = [];
+    (function walk(dir, rel) {
+        fs.readdirSync(dir).sort().forEach(name => {
+            const full = path.join(dir, name), next = rel ? rel + '/' + name : name;
+            if (fs.statSync(full).isDirectory()) walk(full, next); else if (/\.(png|tsv)$/.test(name)) found.push(next);
+        });
+    })(root, '');
+    return found.map(rel => ({name: 'native/dock/res/' + rel, source: path.join(root, rel)}));
+}
 function collectFiles() {
-    const names = ['config.xml', 'index.html', 'icon.png', 'native/TvState.dll', 'native/TvState.runtimeconfig.json'].concat(
+    const dockFiles = dockResources();
+    const names = ['config.xml', 'index.html', 'icon.png', 'native/TvState.dll', 'native/TvState.runtimeconfig.json',
+        'native/dock/tvlauncher-dotnet.dll', 'native/dock/tvlauncher-dotnet.runtimeconfig.json'].concat(
         fs.readdirSync(path.join(__dirname,'service')).filter(name => name.endsWith('.js')).sort().map(name => 'service/' + name));
     const metadata = Object.assign({}, require('./service/build-info.js'));
     let revision = process.env.VETRO_SOURCE_REVISION;
@@ -18,7 +31,8 @@ function collectFiles() {
     }
     return names.map(name => ({uri: encodeURIComponent(name), data: name === 'service/build-info.js'
         ? Buffer.from("'use strict';\nmodule.exports = " + JSON.stringify(metadata) + ';\n')
-        : fs.readFileSync(path.join(__dirname,name))}));
+        : fs.readFileSync(path.join(__dirname,name))}))
+        .concat(dockFiles.map(file => ({uri: encodeURIComponent(file.name), data: fs.readFileSync(file.source)})));
 }
 function zip(files) {
     const chunks = [], directory = []; let offset = 0;

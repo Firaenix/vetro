@@ -55,6 +55,13 @@ async function main() {
     assert.equal((await request('POST', '/exec', '{"cmd":"id"}')).status, 503);
     assert.equal((await request('POST', '/exec', 'id')).status, 503);
   });
+  await check('the dock accepts only known actions and never touches the TV on a bad one', async function () {
+    assert.equal((await request('POST', '/dock', 'null')).status, 400);
+    const bad = await request('POST', '/dock', '{"action":"format"}');
+    assert.equal(bad.status, 409); assert.match(JSON.parse(bad.body).error, /Invalid dock action/);
+    const status = await request('GET', '/dock');
+    assert.ok([200, 503].includes(status.status));
+  });
   await check('malformed TV menu ID returns 400',async function(){assert.equal((await request('GET','/tv-menu?id=%ZZ')).status,400);});
   await check('GET /status returns JSON', async function () {
     const response = await request('GET', '/status');
