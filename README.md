@@ -45,7 +45,7 @@ Quick settings and Task manager (the former Debloater) share the same inventory:
 
 ## Quick settings: quick wins
 
-Quick settings is the first panel. Each switch is a win, worded as what you get, and *on* means it is applied: **Disable HbbTV**, **Disable MultiScreen autostart**, **Disable Ambient autostart** (these three free memory), **Disable viewing-data tracking** (ACR), **Block ad and tracking domains** and **Disable automatic firmware update**, plus the voice assistants. A chip says *Done* or *Partly done*, and every win can be switched back. The memory figures come from a process survey of a Q80A; the effect of the new switches on a running TV is still being verified. Launcher (beta) and Remapper (the former Remote panel) sit next to it at the top of the navigation.
+Quick settings is the first panel. Each switch is a win, worded as what you get, and *on* means it is applied: **Disable HbbTV** and **Disable MultiScreen autostart** (these two free memory), **Disable viewing-data tracking** (ACR), **Block ad and tracking domains** and **Disable automatic firmware update**, plus the voice assistants. A chip says *Done* or *Partly done*, and every win can be switched back. The memory figures come from a process survey of a Q80A; the effect of the new switches on a running TV is still being verified. Launcher (beta) and Remapper (the former Remote panel) sit next to it at the top of the navigation.
 
 ## More privacy, fewer voice services
 

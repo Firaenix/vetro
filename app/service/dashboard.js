@@ -544,8 +544,8 @@ var quickData={dns:null,leftovers:null,leftoversError:null,hbbtvError:null,wins:
 // Every Quick settings switch is a win: on means it is applied, off puts the TV back. Memory figures were measured on a Q80A.
 var groupTitles={acr:'Disable viewing-data tracking',alexa:'Disable Alexa',google:'Disable Google Assistant',bixby:'Disable Bixby',voice:'Disable the other voice services'};
 var winCopy={
- hbbtv:{title:'Disable HbbTV',desc:'Stops the red-button data service and keeps it from coming back after a source change or a restart. Frees about 22 MB of memory.',
-  detail:'Sets the HbbTV menu value to Off, stops the app and blocks its relaunch until the next restart, where Vetro does it again. Switch off to restore the previous value.'},
+ hbbtv:{title:'Disable HbbTV',desc:'Stops the red-button app and the service that keeps starting it again, so it stays off after a source change, a wake-up or a restart. Frees about 22 MB of memory.',
+  detail:'Sets the HbbTV menu value to Off, stops the HbbTV service first and then the app (the service starts the app again if it is left running), and does the same after every restart of the TV. Switch off to restore the previous value and start both again.'},
  multiscreen:{title:'Disable MultiScreen autostart',desc:'Samsung loads Multi View in the background at every restart of the TV. This stops that; Multi View still opens when you ask for it, and its first launch takes a few seconds longer. Frees about 15 MB.',
   detail:'Adds the file disable_preloading that Samsung’s own start-up unit checks, and stops the app now. Switch off to remove the file; nothing else is changed.'},
  ambient:{title:'Disable Ambient autostart',desc:'Samsung starts the Ambient app 15 seconds after every restart of the TV. Vetro stops it once it is up. The Ambient key starts it again when you press it. Frees about 20 MB.',
@@ -584,8 +584,8 @@ function hbbtvItem(){
  if(!h)state=chip(quickData.hbbtvError||'Reading…',quickData.hbbtvError?'partial':'');
  else{
   var blocked=h.off&&!h.canRestore;
-  if(h.off)state=chip('Done · off, stopped and kept from restarting','on');
-  else if(h.valueOff)state=chip('Partly done · the menu says Off, but the app '+(h.running?'is still running':'can start again'),'partial');
+  if(h.off)state=chip('Done · HbbTV and its service are stopped','on');
+  else if(h.valueOff)state=chip('Partly done · the menu says Off, but '+(h.running?'the app is still running':h.serviceRunning?'its service can start it again':'the relaunch brake is missing'),'partial');
   control=switchMarkup('data-hbbtv-disable',!!h.off,settingBusy||blocked,c.title)+(blocked?'<p class="section-note">Vetro does not have the previous value. Turn HbbTV on from the TV menu.</p>':'');
  }
  return quickItem('hbbtv',c.title,c.desc,state,control,'<details><summary>What this changes</summary><p>'+esc(c.detail)+'</p></details>');
@@ -598,12 +598,13 @@ function renderQuick(){
   !d?chip('Reading…'):d.enabled&&!d.applied?chip('Saved as on, not applied','partial'):dnsOn?chip('Done · '+d.domains.length+' domain'+(d.domains.length===1?'':'s')+' blocked','on'):chip(dnsNoDomains?'No domains saved':d.domains.length+' domain'+(d.domains.length===1?'':'s')+' saved'),
   d?switchMarkup('data-dns-switch',dnsOn,quickBusy||uiOperationBusy.dns||dnsNoDomains&&!dnsOn,'Block ad and tracking domains'):'',
   dnsNoDomains?'<div class="quick-actions"><button data-quick-open="dns">Add domains</button></div>':'');
- $('quickMemory').innerHTML=hbbtvItem()+winItem('multiscreen')+winItem('ambient');
+ // Ambient is not offered: Samsung starts it again within seconds of a stop, and what does that is not known yet.
+ $('quickMemory').innerHTML=hbbtvItem()+winItem('multiscreen');
  $('quickPrivacy').innerHTML=groupItem(acr)+dns;
  $('quickControl').innerHTML=winItem('firmware');
  $('quickVoice').innerHTML=quickGroups.filter(function(g){return g.section==='voice'}).map(groupItem).join('');
  var acrDone=inventory.length&&quickState(acr,inventory).status==='off';
- var flags=[h&&h.off,winState('multiscreen')==='on',winState('ambient')==='on',winState('firmware')==='on',acrDone,dnsOn],total=flags.length,done=flags.filter(Boolean).length;
+ var flags=[h&&h.off,winState('multiscreen')==='on',winState('firmware')==='on',acrDone,dnsOn],total=flags.length,done=flags.filter(Boolean).length;
  $('quickScore').innerHTML=chip(done+' of '+total+' quick wins applied',done===total?'on':'')+'<span class="bar" aria-hidden="true"><i style="width:'+Math.round(done/total*100)+'%"></i></span>';
  var l=quickData.leftovers,files=l?l.files.filter(function(f){return f.isPackage}):[];
  var lstate=quickData.leftoversError?chip(quickData.leftoversError,'partial'):!l?chip('Reading…'):files.length?chip(files.length+' package file'+(files.length===1?'':'s')+' · '+fileSize(l.packageBytes),'partial'):chip('No package files');
@@ -635,7 +636,7 @@ function applyQuick(id,off){
 }
 function setHbbtv(on){
  if(!hbbtvData||settingBusy)return;var off=!on,expected=hbbtvData.value;settingBusy=true;renderQuick();
- return runUiOperation('settings',off?'Disable HbbTV':'Enable HbbTV','HbbTV',null,function(mark){return api('/hbbtv',{off:off,expected:expected}).then(function(d){if(d.off!==off||!Number.isInteger(d.value))throw Error('HbbTV state not confirmed');hbbtvData=d;var message='HbbTV '+(off?'off':'on')+'. '+(d.changed===false?'Already in the requested state. ':'')+'Menu value '+expected+' → '+d.value+' read back'+(off?'; the app is stopped and kept from restarting':'; the app was started')+'. Check the red button on the TV.';mark(message,'Value read back');return {resultLabel:'Value read back',message:message}})}).finally(function(){settingBusy=false;renderQuick();renderPrivacy();if(currentPanel==='tvsettings'&&privacyData)loadPrivacy();});
+ return runUiOperation('settings',off?'Disable HbbTV':'Enable HbbTV','HbbTV',null,function(mark){return api('/hbbtv',{off:off,expected:expected}).then(function(d){if(d.off!==off||!Number.isInteger(d.value))throw Error('HbbTV state not confirmed');hbbtvData=d;var message='HbbTV '+(off?'off':'on')+'. '+(d.changed===false?'Already in the requested state. ':'')+'Menu value '+expected+' → '+d.value+' read back'+(off?'; the app and its service are stopped':'; the service and the app were started')+'. Check the red button on the TV.';mark(message,'Value read back');return {resultLabel:'Value read back',message:message}})}).finally(function(){settingBusy=false;renderQuick();renderPrivacy();if(currentPanel==='tvsettings'&&privacyData)loadPrivacy();});
 }
 var winsBusy=false;
 function winMessage(id,on,d){
