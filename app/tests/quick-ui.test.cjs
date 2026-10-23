@@ -28,7 +28,7 @@ const tick=()=>new Promise(r=>setImmediate(r));
  assert.match(memory,/Disable MultiScreen autostart/);assert.match(memory,/data-win-switch="multiscreen" checked/);assert.match(memory,/Done · Multi View starts when you open it/);
  assert.doesNotMatch(memory,/Ambient/,'Ambient is not offered until what restarts it is known');
  assert.match(el('quickControl').innerHTML,/Disable automatic firmware update/);assert.doesNotMatch(el('quickControl').innerHTML,/data-win-switch="firmware" checked/);
- assert.match(el('quickScore').innerHTML,/2 of 5 quick wins applied/,'HbbTV and MultiScreen are done; the others are not');
+ assert.doesNotMatch(html,/quick wins applied|quickScore/,'no progress counter');
  assert.doesNotMatch(el('quickPrivacy').innerHTML,/Yes|No</);assert.match(el('quickPrivacy').innerHTML,/Disable viewing-data tracking/);
  assert.match(el('quickPrivacy').innerHTML,/No domains saved/);assert.match(el('quickPrivacy').innerHTML,/data-quick-open="dns"/);
  assert.match(el('quickStorage').innerHTML,/1 package file · 2 KiB/);
