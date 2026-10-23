@@ -1,10 +1,10 @@
-# Vetro dock
+# Vetro launcher
 
-A glass dock for a rooted Samsung Tizen TV, written in C# against the TV's own EFL
-libraries and run with the TV's `dotnet`. Vetro starts and stops it from its **Dock**
+A glass launcher for a rooted Samsung Tizen TV, written in C# against the TV's own EFL
+libraries and run with the TV's `dotnet`. Vetro starts and stops it from its **Launcher**
 tab; it is off until you turn it on.
 
-When it is on, the Home key opens this dock instead of Samsung's Home. The dock shows
+When it is on, the Home key opens this launcher instead of Samsung's Home. The dock shows
 the same apps, in the same order and with the same icons as Samsung's Home row, read
 from the TV at start-up, and ends with Source and Settings.
 

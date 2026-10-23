@@ -14,6 +14,11 @@ var MAX_ENTRIES = 40;          // the dock refuses more
 var APP_ID = /^[A-Za-z0-9_.-]{1,120}$/;
 var ICON_FILE = /^(?:\/opt\/share\/webappservice\/apps_icon|\/opt\/usr\/apps|\/usr\/apps)\/[A-Za-z0-9_.\/-]{1,160}\.png$/;
 var VIEWER = 'org.tizen.tv-viewer';
+// Fix TizenTube: TizenTube is a sideloaded app that stands in for YouTube. Samsung's own YouTube
+// (a Cobalt process) has to be closed before TizenTube starts, and the tile borrows the icon
+// Samsung's registry holds for YouTube.
+var TIZENTUBE = /TizenTube/i;
+var COBALT_YOUTUBE = 'com.samsung.tv.cobalt-yt';
 // The dock repeats this check, but the file is written here, so refuse a bad path here as well.
 function iconOk(p) { return ICON_FILE.test(p) && p.indexOf('..') < 0 && p.indexOf('//') < 0; }
 
@@ -85,13 +90,24 @@ function cleanLabel(text, fallback) {
 
 // Same order as Samsung's row. Apps the registry does not know, hidden ones and anything with an
 // unusable id are left out and listed in `skipped`, so the page can say why a row is missing.
-function build(parsed) {
+function youtubeIcon(parsed) {
+    var found = null;
+    Object.keys(parsed.registry).forEach(function (id) {
+        var r = parsed.registry[id];
+        if (!found && !r.hidden && /^youtube$/i.test(r.title.trim()) && !TIZENTUBE.test(r.appId) && parsed.icons[id]) found = parsed.icons[id];
+    });
+    return found;
+}
+
+function build(parsed, options) {
+    options = options || {};
     var entries = [], skipped = [], slugs = {};
     function add(slug, label, appId, icon) {
         var base = slug, n = 2;
         while (slugs[slug] || slug === 'source' || slug === 'settings') slug = base.slice(0, 36) + '-' + n++;
         slugs[slug] = true;
-        entries.push({slug: slug, label: label, appId: appId, icon: icon || null});
+        entries.push({slug: slug, label: label, appId: appId, icon: icon || null, killFirst: null});
+        return entries[entries.length - 1];
     }
     parsed.order.forEach(function (item) {
         if (entries.length >= MAX_ENTRIES - SYSTEM_ROWS.length) { skipped.push({item: item, reason: 'The dock holds ' + MAX_ENTRIES + ' entries'}); return; }
@@ -107,7 +123,12 @@ function build(parsed) {
         if (!reg) { skipped.push({item: item, reason: 'Not installed'}); return; }
         if (reg.hidden) { skipped.push({item: item, reason: 'Hidden in the registry'}); return; }
         if (!APP_ID.test(reg.appId)) { skipped.push({item: item, reason: 'Unusable app id'}); return; }
-        add(slugify(reg.title), cleanLabel(reg.title, reg.appId), reg.appId, parsed.icons[ident] || parsed.packageIcons[reg.appId]);
+        var entry = add(slugify(reg.title), cleanLabel(reg.title, reg.appId), reg.appId, parsed.icons[ident] || parsed.packageIcons[reg.appId]);
+        if (options.fixTizenTube && TIZENTUBE.test(reg.appId)) {
+            entry.killFirst = COBALT_YOUTUBE;
+            var yt = youtubeIcon(parsed);
+            if (yt) entry.icon = yt; else skipped.push({item: entry.slug, reason: 'No YouTube icon found; the app\'s own icon is used'});
+        }
     });
     return {entries: entries, skipped: skipped};
 }
@@ -115,7 +136,7 @@ function build(parsed) {
 function tsv(built) {
     var lines = ['# written by Vetro from the TV\'s own Home row; do not edit, it is rebuilt every time the dock starts'];
     built.entries.forEach(function (e) {
-        lines.push([e.slug, e.label, e.appId, '', e.icon || ''].join('\t').replace(/\t+$/, ''));
+        lines.push([e.slug, e.label, e.appId, '', e.icon || '', e.killFirst || ''].join('\t').replace(/\t+$/, ''));
     });
     return lines.concat(SYSTEM_ROWS).join('\n') + '\n';
 }
@@ -139,12 +160,12 @@ function existing(execute, built) {
 
 // Reads the TV and returns {tsv, count, skipped}. Throws when the Home row cannot be read at all,
 // because a dock with no apps is worse than none.
-function load(execute) {
+function load(execute, options) {
     return execute(wrap(script()), 20000).then(function (r) {
         if (r.exit_code || r.timed_out) throw new Error(r.stderr || 'Home data unavailable');
         var parsed = parse(r.stdout);
         if (!parsed.order.length) throw new Error('The Home row is empty or unreadable');
-        var built = build(parsed);
+        var built = build(parsed, options);
         if (!built.entries.length) throw new Error('None of the Home row apps could be matched in the registry');
         return existing(execute, built).then(function (b) {
             return {tsv: tsv(b), count: b.entries.length, skipped: b.skipped};
@@ -152,4 +173,4 @@ function load(execute) {
     });
 }
 
-module.exports = {load: load, parse: parse, build: build, tsv: tsv, script: script, slugify: slugify, cleanLabel: cleanLabel};
+module.exports = {iconPathOk: iconOk, COBALT_YOUTUBE: COBALT_YOUTUBE, load: load, parse: parse, build: build, tsv: tsv, script: script, slugify: slugify, cleanLabel: cleanLabel};

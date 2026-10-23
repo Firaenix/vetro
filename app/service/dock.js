@@ -53,8 +53,8 @@ Dock.prototype.installed = function () {
 Dock.prototype.readState = function () {
     try {
         var s = JSON.parse(fs.readFileSync(this.stateFile, 'utf8'));
-        return {enabled: s && s.enabled === true, since: typeof s.since === 'number' ? s.since : null};
-    } catch (e) { return {enabled: false, since: null}; }
+        return {enabled: s && s.enabled === true, since: typeof s.since === 'number' ? s.since : null, fixTizenTube: s && s.fixTizenTube === true};
+    } catch (e) { return {enabled: false, since: null, fixTizenTube: false}; }
 };
 
 Dock.prototype.writeState = function (state) {
@@ -86,7 +86,8 @@ Dock.prototype.probe = function () {
 Dock.prototype.status = function () {
     var self = this, state = this.readState();
     var base = {installed: this.installed(), enabled: state.enabled, since: state.since, busy: this.busy,
-        error: this.lastError, failures: this.failures, apps: this.lastCatalog};
+        error: this.lastError, failures: this.failures, apps: this.lastCatalog, fixTizenTube: state.fixTizenTube,
+        entries: this.entries(), inputs: this.inputEntries()};
     return this.probe().then(function (p) {
         return Object.assign(base, {running: p.running, pid: p.pid, samsungHome: p.samsungHome, log: p.log});
     }).catch(function (e) {
@@ -115,7 +116,7 @@ Dock.prototype.stopLines = function () {
 
 Dock.prototype.writeCatalog = function () {
     var self = this;
-    return catalog.load(this.execute).then(function (c) {
+    return catalog.load(this.execute, {fixTizenTube: this.readState().fixTizenTube}).then(function (c) {
         try { fs.writeFileSync(self.appsFile, c.tsv); }
         catch (e) { throw new Error('The app list could not be saved: ' + e.message); }
         self.lastCatalog = {count: c.count, skipped: c.skipped, at: self.now()};
@@ -150,7 +151,7 @@ Dock.prototype.enable = function () {
     if (!this.installed()) return Promise.reject(new Error('The dock files are not in this Vetro package'));
     this.busy = true; this.lastError = null;
     return this.launch().then(function () {
-        self.writeState({enabled: true, since: self.now()});
+        self.writeState({enabled: true, since: self.now(), fixTizenTube: self.readState().fixTizenTube});
         self.failures = 0; self.nextTry = 0;
         // Samsung's Home is idle in the background; closing it frees its memory, and Settings or
         // Source opened from the dock start it again on demand.
@@ -171,7 +172,7 @@ Dock.prototype.disable = function () {
     if (this.busy) return Promise.reject(new Error('Another dock change is in progress'));
     this.busy = true; this.lastError = null;
     var state = this.readState();
-    try { this.writeState({enabled: false, since: state.since}); }
+    try { this.writeState({enabled: false, since: state.since, fixTizenTube: state.fixTizenTube}); }
     catch (e) { this.busy = false; return Promise.reject(e); }
     return this.stopDock().then(function () { return self.status(); })
         .finally(function () { self.busy = false; });
@@ -186,6 +187,54 @@ Dock.prototype.refresh = function () {
     return this.launch().then(function () { return self.status(); }).catch(function (e) {
         self.lastError = e.message; throw e;
     }).finally(function () { self.busy = false; });
+};
+
+// The list the dock was last given, as the page's preview shows it. Icons are served by iconFile().
+function parseTsv(text) {
+    return String(text || '').split('\n').filter(function (l) { return l.trim() && l.trim()[0] !== '#'; }).map(function (l) {
+        var f = l.split('\t'), target = f[2] || '';
+        return {slug: f[0], label: f[1], appId: target, icon: f[4] || null, killFirst: f[5] || null,
+            system: /^(?:sys|key|panel):/.test(target), panel: /^panel:/.test(target), source: /^source:/.test(target) ? +target.slice(7) : null};
+    }).filter(function (e) { return /^[a-z0-9_-]{1,40}$/.test(e.slug || '') && e.label; });
+}
+Dock.prototype.entries = function () {
+    try { return parseTsv(fs.readFileSync(this.appsFile, 'utf8')); } catch (e) { return []; }
+};
+Dock.prototype.inputEntries = function () {
+    try { return parseTsv(fs.readFileSync(path.join(this.dir, 'res', 'inputs.tsv'), 'utf8')); } catch (e) { return []; }
+};
+
+// Turn the TizenTube fix on or off. It only changes the list, so a running dock is rebuilt.
+Dock.prototype.setFixTizenTube = function (on) {
+    var self = this;
+    if (typeof on !== 'boolean') return Promise.reject(new Error('Invalid value'));
+    if (this.busy) return Promise.reject(new Error('Another launcher change is in progress'));
+    var state = this.readState();
+    try { this.writeState({enabled: state.enabled, since: state.since, fixTizenTube: on}); }
+    catch (e) { return Promise.reject(e); }
+    if (!state.enabled) return this.status();
+    return this.refresh().catch(function (e) {
+        try { self.writeState({enabled: state.enabled, since: state.since, fixTizenTube: state.fixTizenTube}); } catch (e2) {}
+        throw e;
+    });
+};
+
+// The file behind one tile of the preview: the app's own icon when the list names one that is a
+// safe path, else the dock's packaged icon. Returns a Buffer or null.
+Dock.prototype.iconFile = function (slug) {
+    if (!/^[a-z0-9_-]{1,40}$/.test(String(slug))) return null;
+    var all = this.entries().concat(this.inputEntries()), entry = all.filter(function (e) { return e.slug === slug; })[0];
+    if (!entry) return null;
+    var files = [];
+    if (entry.icon && catalog.iconPathOk(entry.icon)) files.push(entry.icon);
+    files.push(path.join(this.dir, 'res', 'icons', slug + '.png'));
+    for (var i = 0; i < files.length; i++) {
+        try {
+            var data = fs.readFileSync(files[i]);
+            if (data.length <= 1048576 && data.slice(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))) return data;
+        } catch (e) { /* next */ }
+    }
+    return null;
 };
 
 // Called every few seconds by the service. Starts the dock after a boot or a crash while it is
@@ -204,7 +253,7 @@ Dock.prototype.supervise = function (agentConnected) {
         self.nextTry = self.now() + Math.min(300000, 30000 * Math.pow(2, self.failures - 1));
         if (self.failures >= MAX_FAILURES) {
             // Stop trying: Samsung's Home answers the Home key again, and the page says why.
-            try { self.writeState({enabled: false, since: state.since}); } catch (e2) {}
+            try { self.writeState({enabled: false, since: state.since, fixTizenTube: state.fixTizenTube}); } catch (e2) {}
             self.lastError = 'The dock could not be kept running and was switched off. ' + e.message;
             self.failures = 0;
         }

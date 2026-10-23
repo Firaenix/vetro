@@ -661,6 +661,14 @@ namespace Launcher
         {
             try
             {
+                if (e.KillFirst != null && e.AppId != null)
+                {
+                    // Close the other app first, then start this one: one detached shell, so the dock does not wait.
+                    // Both ids are plain Tizen ids (Catalog.ValidAppId), safe on a command line.
+                    int rc = Libc.system("( /usr/bin/app_launcher -k " + e.KillFirst + "; sleep 0.4; /usr/bin/app_launcher -s " + e.AppId + " ) >/dev/null 2>&1 &");
+                    Log("launch " + e.AppId + " after closing " + e.KillFirst + " rc=" + rc);
+                    return;
+                }
                 if (SendLaunch(e.AppId)) { Log("launch " + e.AppId); return; }
                 Log("launch failed: " + e.AppId);
                 if (e.FallbackAppId != null && SendLaunch(e.FallbackAppId)) { Log("launch " + e.FallbackAppId + " (fallback)"); return; }

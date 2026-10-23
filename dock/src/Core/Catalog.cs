@@ -38,6 +38,12 @@ namespace Launcher.Core
         /// </summary>
         public readonly string IconPath;
 
+        /// <summary>
+        /// Id of an app to kill just before this one is launched (for example YouTube's own process, which
+        /// gets in the way of TizenTube); null when nothing needs to be closed first.
+        /// </summary>
+        public readonly string KillFirst;
+
         public AppEntry(string slug, string label, string appId, string fallbackAppId)
             : this(slug, label, appId, fallbackAppId, null) { }
 
@@ -51,9 +57,12 @@ namespace Launcher.Core
             : this(slug, label, appId, fallbackAppId, key, sourceType, panel, systemApp, null) { }
 
         public AppEntry(string slug, string label, string appId, string fallbackAppId, string key, int sourceType, string panel, bool systemApp, string iconPath)
+            : this(slug, label, appId, fallbackAppId, key, sourceType, panel, systemApp, iconPath, null) { }
+
+        public AppEntry(string slug, string label, string appId, string fallbackAppId, string key, int sourceType, string panel, bool systemApp, string iconPath, string killFirst)
         {
             Slug = slug; Label = label; AppId = appId; FallbackAppId = fallbackAppId; Key = key;
-            SourceType = sourceType; Panel = panel; SystemApp = systemApp; IconPath = iconPath;
+            SourceType = sourceType; Panel = panel; SystemApp = systemApp; IconPath = iconPath; KillFirst = killFirst;
         }
     }
 
@@ -66,7 +75,7 @@ namespace Launcher.Core
 
     /// <summary>
     /// Parses the app list written by tools/gen-apps.py. One tab-separated entry per line:
-    /// <c>slug TAB label TAB appId [TAB fallbackAppId [TAB iconPath]]</c>, where the third field may also be
+    /// <c>slug TAB label TAB appId [TAB fallbackAppId [TAB iconPath [TAB killFirstAppId]]]</c>, where the third field may also be
     /// <c>key:XF86Menu</c> (inject that remote key; the fourth field is then an app to open if the
     /// key tool is missing), <c>source:13</c> (switch to that input) or <c>panel:inputs</c> (open
     /// that dock page) or <c>sys:appId</c> (launch that app, drawn as a system control); blank lines and lines starting with '#' are ignored. Bad lines are skipped and reported, never fatal: a launcher
@@ -153,6 +162,7 @@ namespace Launcher.Core
                 string slug = f[0].Trim(), label = f[1].Trim(), appId = f[2].Trim();
                 string fallback = f.Length > 3 ? f[3].Trim() : "";
                 string icon = f.Length > 4 ? f[4].Trim() : "";
+                string killFirst = f.Length > 5 ? f[5].Trim() : "";
                 string key = null, panel = null;
                 int sourceType = -1;
                 bool special = false, systemApp = false;
@@ -188,9 +198,10 @@ namespace Launcher.Core
                 if (!(special && appId.Length == 0) && !IsAppId(appId)) { problems.Add("line " + (n + 1) + ": bad appId"); continue; }
                 if (fallback.Length > 0 && !IsAppId(fallback)) { problems.Add("line " + (n + 1) + ": bad fallback appId"); continue; }
                 if (icon.Length > 0 && !ValidIconPath(icon)) { problems.Add("line " + (n + 1) + ": bad icon path"); continue; }
+                if (killFirst.Length > 0 && !IsAppId(killFirst)) { problems.Add("line " + (n + 1) + ": bad kill-first app id"); continue; }
                 if (!seen.Add(slug)) { problems.Add("line " + (n + 1) + ": duplicate slug " + slug); continue; }
                 if (entries.Count >= MaxEntries) { problems.Add("line " + (n + 1) + ": more than " + MaxEntries + " entries, ignored"); continue; }
-                entries.Add(new AppEntry(slug, label, appId.Length > 0 ? appId : null, fallback.Length > 0 ? fallback : null, key, sourceType, panel, systemApp, icon.Length > 0 ? icon : null));
+                entries.Add(new AppEntry(slug, label, appId.Length > 0 ? appId : null, fallback.Length > 0 ? fallback : null, key, sourceType, panel, systemApp, icon.Length > 0 ? icon : null, killFirst.Length > 0 ? killFirst : null));
             }
             return new CatalogResult(entries.ToArray(), problems.ToArray());
         }

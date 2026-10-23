@@ -822,6 +822,18 @@ namespace Launcher.Tests
                 T.Eq(key.Entries[0].IconPath, "/usr/apps/a/b.png", "the column works after a key entry too");
             });
 
+            T.Run("catalog: a sixth column names an app to close before launching", () =>
+            {
+                var r = Catalog.Parse("tt\tTizenTube\tx.TizenTube\t\t/opt/usr/apps/a/b.png\tcom.samsung.tv.cobalt-yt\nb\tB\tx.b\n");
+                T.Eq(r.Entries[0].KillFirst, "com.samsung.tv.cobalt-yt", "kill-first id kept");
+                T.Eq(r.Entries[1].KillFirst, null, "none by default");
+                T.True(Catalog.ValidAppId(r.Entries[0].KillFirst), "and it is a plain id");
+                var bad = Catalog.Parse("a\tA\tx.a\t\t\tbad id;rm\n");
+                T.Eq(bad.Entries.Length, 0, "an id that is not plain drops the line");
+                T.Eq(bad.Problems.Length, 1, "and reports it");
+                T.Eq(Catalog.Parse("a\tA\tx.a\t\t\tcom.x.y\n").Entries[0].IconPath, null, "an empty icon column stays empty");
+            });
+
             T.Run("icons: rounded corners, and loose logos go on a tile", () =>
             {
                 // A fully opaque square tile: only the four corners may change.

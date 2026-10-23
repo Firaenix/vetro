@@ -130,5 +130,51 @@ function fixture(options) {
     await f.dock.refresh();
     assert.ok(fs.readFileSync(path.join(f.tmp, 'apps.tsv'), 'utf8').includes('Netflix HD'));
 
+    // Fix TizenTube and the preview data
+    const TT = [
+        'O|d/webapp@tt', 'O|d/webapp@aaa',
+        'R|' + hex('tt') + '|' + hex('TizenTube') + '|' + hex('xvvl3S1TT1.TizenTubeStandalone') + '|0',
+        'R|' + hex('yt') + '|' + hex('YouTube') + '|' + hex('9Ur5IzDKqV.TizenYouTube') + '|0',
+        'R|' + hex('aaa') + '|' + hex('Netflix') + '|' + hex('org.tizen.netflix-app') + '|0',
+        'I|tt|/opt/share/webappservice/apps_icon/all/tt/icon.png', 'I|yt|/opt/share/webappservice/apps_icon/all/yt/224x224.png',
+        'I|aaa|/opt/share/webappservice/apps_icon/all/aaa/224x224.png'
+    ].join('\n');
+    f = fixture({homeData: TT});
+    await assert.rejects(f.dock.setFixTizenTube('yes'), /Invalid value/);
+    s = await f.dock.setFixTizenTube(true);
+    assert.equal(s.fixTizenTube, true, 'saved while the launcher is off');
+    assert.equal(s.enabled, false);
+    assert.ok(!f.tv.started, 'the launcher is not started by the fix');
+    s = await f.dock.enable();
+    assert.equal(s.fixTizenTube, true, 'turning the launcher on keeps the choice');
+    let tsv = fs.readFileSync(path.join(f.tmp, 'apps.tsv'), 'utf8');
+    assert.ok(tsv.includes('tizentube\tTizenTube\txvvl3S1TT1.TizenTubeStandalone\t\t/opt/share/webappservice/apps_icon/all/yt/224x224.png\tcom.samsung.tv.cobalt-yt'), 'YouTube icon and kill-first in the list');
+    assert.deepEqual(s.entries.map(e => e.slug), ['tizentube', 'netflix', 'source', 'settings']);
+    assert.equal(s.entries[0].killFirst, 'com.samsung.tv.cobalt-yt');
+    assert.equal(s.entries[2].system, true); assert.equal(s.entries[2].panel, true);
+    assert.equal(s.entries[3].system, true); assert.equal(s.entries[1].system, false);
+    s = await f.dock.setFixTizenTube(false);
+    assert.equal(s.fixTizenTube, false);
+    assert.equal(s.enabled, true, 'the launcher stays on');
+    tsv = fs.readFileSync(path.join(f.tmp, 'apps.tsv'), 'utf8');
+    assert.ok(!tsv.includes('cobalt-yt') && tsv.includes('/all/tt/icon.png'), 'off again: the list is rebuilt without it');
+    f.tv.neverStarts = true; f.tv.running = false;
+    await assert.rejects(f.dock.setFixTizenTube(true), /did not start/);
+    assert.equal(f.dock.readState().fixTizenTube, false, 'a failed rebuild puts the choice back');
+
+    // Preview icons: only a real PNG, only from safe places
+    const png = Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), Buffer.from('data')]);
+    f = fixture({homeData: TT});
+    await f.dock.enable();
+    fs.mkdirSync(path.join(f.tmp, 'dock', 'res', 'icons'), {recursive: true});
+    fs.writeFileSync(path.join(f.tmp, 'dock', 'res', 'icons', 'settings.png'), png);
+    assert.ok(f.dock.iconFile('settings').equals(png), 'a packaged icon is served');
+    assert.equal(f.dock.iconFile('../settings'), null, 'no path tricks');
+    assert.equal(f.dock.iconFile('nope'), null);
+    assert.equal(f.dock.iconFile('netflix'), null, 'an icon that is not readable here gives nothing, not an error');
+    fs.writeFileSync(f.dock.appsFile, '# x\nevil\tEvil\tx.evil\t\t/etc/passwd\nnet\tNet\tx.net\t\t/opt/usr/apps/a/../../b.png\n');
+    assert.equal(f.dock.iconFile('evil'), null, 'a path outside the icon places is never read');
+    assert.equal(f.dock.iconFile('net'), null, 'nor one with parent directories');
+
     console.log('PASS dock service: on, off, boot start, crash restart, back-off and give-up');
 })().catch(e => { console.error(e); process.exitCode = 1; });

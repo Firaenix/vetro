@@ -64,6 +64,25 @@ const capped = catalog.build(many);
 assert.equal(capped.entries.length, 38);
 assert.equal(capped.skipped.length, 22);
 
+// Fix TizenTube: YouTube's icon, and Samsung's YouTube closed first
+const tt = {order: ['d/webapp@tt', 'd/webapp@aaa'], icons: {tt: '/opt/share/webappservice/apps_icon/all/tt/icon.png', yt: '/opt/share/webappservice/apps_icon/all/yt/224x224.png', aaa: '/opt/share/webappservice/apps_icon/all/aaa/224x224.png'}, packageIcons: {},
+    registry: {tt: {title: 'TizenTube', appId: 'xvvl3S1TT1.TizenTubeStandalone', hidden: false}, yt: {title: 'YouTube', appId: '9Ur5IzDKqV.TizenYouTube', hidden: false}, aaa: {title: 'Netflix', appId: 'org.tizen.netflix-app', hidden: false}}};
+const plain = catalog.build(tt);
+assert.equal(plain.entries[0].killFirst, null, 'off: TizenTube is launched as it is');
+assert.equal(plain.entries[0].icon, '/opt/share/webappservice/apps_icon/all/tt/icon.png', 'off: its own icon');
+const fixed = catalog.build(tt, {fixTizenTube: true});
+assert.equal(fixed.entries[0].killFirst, 'com.samsung.tv.cobalt-yt');
+assert.equal(fixed.entries[0].icon, '/opt/share/webappservice/apps_icon/all/yt/224x224.png', 'on: the YouTube tile icon');
+assert.equal(fixed.entries[0].label, 'TizenTube', 'the name is left alone');
+assert.equal(fixed.entries[1].killFirst, null, 'other apps are untouched');
+assert.equal(fixed.entries[1].icon, plain.entries[1].icon);
+assert.equal(catalog.tsv(fixed).split('\n')[1], 'tizentube\tTizenTube\txvvl3S1TT1.TizenTubeStandalone\t\t/opt/share/webappservice/apps_icon/all/yt/224x224.png\tcom.samsung.tv.cobalt-yt');
+assert.equal(catalog.tsv(plain).split('\n')[1].split('\t').length, 5, 'no sixth column when off');
+const noYt = catalog.build(Object.assign({}, tt, {icons: {tt: tt.icons.tt}}), {fixTizenTube: true});
+assert.equal(noYt.entries[0].killFirst, 'com.samsung.tv.cobalt-yt', 'still closes YouTube first');
+assert.equal(noYt.entries[0].icon, tt.icons.tt, 'without a YouTube icon the app keeps its own');
+assert.ok(noYt.skipped.some(x => /No YouTube icon/.test(x.reason)));
+
 // load(): one read of the Home data, one check that the icon files exist; errors are explicit
 (async function () {
     const missing = '/opt/usr/apps/com.samsung.tv.tvplus/shared/res/tvplus.png';
