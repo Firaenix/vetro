@@ -62,6 +62,9 @@ const noWait=()=>Promise.resolve();
  // It gives up when the app never starts
  t=tv({ambRun:false});w=new qw.Wins(t.execute,{fs:store(),sleep:noWait,bootId:()=>'boot-8'});w.remember('ambient',true);
  did=await w.boot(null);assert.deepEqual(did,[]);assert.ok(t.s.calls.length<=40,'bounded polling');
+ // A build that does not offer Ambient ignores a choice saved by an earlier one
+ t=tv({ambRun:true});w=new qw.Wins(t.execute,{fs:store(),sleep:noWait,bootId:()=>'boot-9',skipAmbient:true});w.remember('ambient',true);
+ assert.deepEqual(await w.boot(null),[]);assert.equal(t.s.ambRun,true);assert.equal(t.s.calls.length,0);
  // HbbTV is enforced through its own control, only when the user chose it
  const calls=[];const fake={enforce:async()=>{calls.push('enforce');return {stopped:true};}};
  t=tv();w=new qw.Wins(t.execute,{fs:store(),sleep:noWait,bootId:()=>'b'});

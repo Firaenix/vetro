@@ -66,6 +66,8 @@ function Wins(execute, options) {
     this.file = options.file || FILE;
     this.sleep = options.sleep || function (ms) { return new Promise(function (resolve) { setTimeout(resolve, ms); }); };
     this.bootId = options.bootId || function () { try { return fs.readFileSync('/proc/sys/kernel/random/boot_id', 'utf8').trim(); } catch (e) { return null; } };
+    // Ambient is not offered in the dashboard (see CHANGELOG): a saved choice from an earlier build is not acted on.
+    this.skipAmbient = !!options.skipAmbient;
     this.busy = false;
 }
 
@@ -171,7 +173,7 @@ Wins.prototype.boot = function (hbbtv) {
     var self = this, mine = this.load(), did = [], id = this.bootId();
     var start = mine.hbbtv && hbbtv ? hbbtv.enforce().then(function (r) { if (r && r.stopped) did.push('hbbtv'); }, function () {}) : Promise.resolve();
     return start.then(function () {
-        if (!mine.ambient || (id && mine.ambientBoot === id)) return did;
+        if (self.skipAmbient || !mine.ambient || (id && mine.ambientBoot === id)) return did;
         var n = 0;
         function poll() {
             return self.execute(wrap(running(AMBIENT_ID) + ' && echo up || echo down'), 8000).then(function (r) {
