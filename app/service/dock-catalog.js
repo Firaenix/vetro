@@ -25,7 +25,8 @@ function iconOk(p) { return ICON_FILE.test(p) && p.indexOf('..') < 0 && p.indexO
 // Live TV entries in the Home row are not web apps. The icon comes from the package of the same
 // name when the TV has one; the dock draws its own generic one otherwise.
 var LIVE = {
-    TVPLUS: {slug: 'tvplus', label: 'Samsung TV Plus', iconPackage: 'com.samsung.tv.tvplus'},
+    // The package's own icon path is stale on some firmware; the TV Plus deep-link package ships the real icon.
+    TVPLUS: {slug: 'tvplus', label: 'Samsung TV Plus', iconPackage: 'com.samsung.tv.tvplus', altIcon: '/opt/usr/apps/com.samsung.tv.tvPlusDeeplinker/shared/res/TVPlus_app_icon.png'},
     RF: {slug: 'livetv', label: 'Live TV', iconPackage: null}
 };
 
@@ -115,7 +116,8 @@ function build(parsed, options) {
         if (kind === 's/livetv') {
             var live = LIVE[ident];
             if (!live) { skipped.push({item: item, reason: 'Unknown live source'}); return; }
-            add(live.slug, live.label, VIEWER, live.iconPackage && parsed.packageIcons[live.iconPackage]);
+            var liveEntry = add(live.slug, live.label, VIEWER, live.iconPackage && parsed.packageIcons[live.iconPackage]);
+            if (live.altIcon) liveEntry.altIcon = live.altIcon;
             return;
         }
         if (kind !== 'd/webapp') { skipped.push({item: item, reason: 'Unsupported entry'}); return; }
@@ -144,18 +146,23 @@ function tsv(built) {
 // The registry can point at an icon that is no longer there (TV Plus does). One more read-only
 // call keeps only the paths that exist; if it fails the paths stay and the dock copes with them.
 function existing(execute, built) {
-    var paths = built.entries.map(function (e) { return e.icon; }).filter(Boolean);
+    var paths = [];
+    built.entries.forEach(function (e) { [e.icon, e.altIcon].forEach(function (p) { if (p && paths.indexOf(p) < 0) paths.push(p); }); });
     if (!paths.length) return Promise.resolve(built);
     var script = 'for p in ' + paths.map(function (p) { return "'" + p + "'"; }).join(' ') + '; do [ -f "$p" ] && echo "OK|$p"; done; true';
     return execute(wrap(script), 10000).then(function (r) {
-        if (r.exit_code || r.timed_out) return built;
+        if (r.exit_code || r.timed_out) { built.entries.forEach(function (e) { delete e.altIcon; }); return built; }
         var ok = {};
         String(r.stdout || '').split('\n').forEach(function (l) { if (l.indexOf('OK|') === 0) ok[l.slice(3).trim()] = true; });
         built.entries.forEach(function (e) {
+            if (e.altIcon) {
+                if (!(e.icon && ok[e.icon]) && ok[e.altIcon]) e.icon = e.altIcon;
+                delete e.altIcon;
+            }
             if (e.icon && !ok[e.icon]) { built.skipped.push({item: e.slug, reason: 'Icon file missing; a generic icon is used'}); e.icon = null; }
         });
         return built;
-    }, function () { return built; });
+    }, function () { built.entries.forEach(function (e) { delete e.altIcon; }); return built; });
 }
 
 // Reads the TV and returns {tsv, count, skipped}. Throws when the Home row cannot be read at all,

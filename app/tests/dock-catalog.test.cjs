@@ -100,9 +100,13 @@ assert.ok(noYt.skipped.some(x => /No YouTube icon/.test(x.reason)));
     assert.ok(seen.every(sc => !/\b(rm|mv|cp|tee|chmod|kill)\b|>\s*\/(?!dev\/null)/.test(sc)), 'neither script writes anything');
     assert.ok(seen[0].includes('.webappservice.db') && seen[0].includes('-readonly'), 'reads only');
     assert.ok(!ok.tsv.includes(missing), 'an icon file that is gone is not listed');
-    assert.ok(ok.tsv.includes('tvplus\tSamsung TV Plus\torg.tizen.tv-viewer\n'), 'TV Plus stays, with a generic icon');
+    const alt = '/opt/usr/apps/com.samsung.tv.tvPlusDeeplinker/shared/res/TVPlus_app_icon.png';
+    assert.ok(ok.tsv.includes('tvplus\tSamsung TV Plus\torg.tizen.tv-viewer\t\t' + alt + '\n'), 'TV Plus: the stale package icon gives way to the deep-link package icon');
+    assert.ok(!ok.skipped.some(x => x.item === 'tvplus'), 'nothing to report when the second icon exists');
+    const bare = await catalog.load(run({exit_code: 0, stdout: OUTPUT}, p => p !== missing && p !== alt));
+    assert.ok(bare.tsv.includes('tvplus\tSamsung TV Plus\torg.tizen.tv-viewer\n'), 'neither icon exists: TV Plus keeps a generic one');
+    assert.ok(bare.skipped.some(x => x.item === 'tvplus' && /Icon file missing/.test(x.reason)));
     assert.ok(ok.tsv.includes('/opt/share/webappservice/apps_icon/all/aaa/224x224.png'), 'icons that exist stay');
-    assert.ok(ok.skipped.some(x => x.item === 'tvplus' && /Icon file missing/.test(x.reason)));
     // If the existence check itself fails, the paths stay (the dock copes with an unloadable file)
     const lenient = await catalog.load(async cmd => {
         const script = Buffer.from(cmd.split(' ')[1], 'base64').toString();
