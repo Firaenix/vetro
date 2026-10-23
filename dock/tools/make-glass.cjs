@@ -221,6 +221,7 @@ renderPng('glass_tile_focus', S, S, [R, R, R, R], glass(true));
 renderPng('shadow', S, S, [0, 0, 0, 0], shadow());
 renderPng('sheet_bg', S, S, [46, 46, 0, 0], sheet());
 renderPng('dock_glow', 180, 180, [0, 0, 0, 0], focusGlow(180, 132, 30));   // 180 = FocusIcon + 2 * HighlightPad
+renderPng('dock_glow_round', 180, 180, [0, 0, 0, 0], focusGlow(180, 132, 66));   // round controls: the outline is a circle
 renderPng('dock_bg', S, S, [46, 46, 46, 46], dock());
 
 // soft radial glow for the focused item

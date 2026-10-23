@@ -41,6 +41,7 @@ namespace Launcher.Ui
         private readonly int[] _iconAlpha;
         private Box _shadowBox, _pillBox, _hlBox, _hlBox2;
         private int _chromeAlpha = -1, _hlAlpha = -1, _hlAlpha2 = -1, _clockAlpha = -1;
+        private bool _hlRound, _hlRound2;      // which outline each glow object currently shows
         private int _clockW, _clockX = int.MinValue, _clockY = int.MinValue;
         private int _current = -1;
         private bool _clipSet;
@@ -196,6 +197,13 @@ namespace Launcher.Ui
             _clockX = int.MinValue;   // re-place on the next frame: the width may have changed
         }
 
+        private void GlowShape(IntPtr img, ref bool round, bool wantRound)
+        {
+            if (round == wantRound) return;
+            round = wantRound;
+            Efl.evas_object_image_file_set(img, Path.Combine(_assets, (round ? "dock_glow_round" : "dock_glow") + ".png"), null);
+        }
+
         private IntPtr NineSlice(string name, int border) { return NineSlice(name, border, border, border, border); }
 
         private IntPtr NineSlice(string name, int l, int r, int t, int b)
@@ -341,6 +349,9 @@ namespace Launcher.Ui
             // reached (two objects, one per icon), following the same eased focus as the icon growth.
             int g1, g2; float w2;
             _layout.GlowAt(fp, out g1, out g2, out w2);
+            // The pinned system entries are round controls: their glow follows a circle, not the apps' rounded square.
+            GlowShape(_highlight, ref _hlRound, g1 >= 0 && _layout.IsPinned(g1));
+            GlowShape(_highlight2, ref _hlRound2, g2 >= 0 && _layout.IsPinned(g2));
             Place(_highlight, ref _hlBox, _layout.GlowBox(g1, scroll, slide));
             Place(_highlight2, ref _hlBox2, _layout.GlowBox(g2, scroll, slide));
             int ga1 = (int)Math.Round(presence * (1f - w2)), ga2 = (int)Math.Round(presence * w2);

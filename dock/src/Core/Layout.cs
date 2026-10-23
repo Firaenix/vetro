@@ -171,6 +171,9 @@ namespace Launcher.Core
             weightSecond = second == first ? 0f : p - first;
         }
 
+        /// <summary>True for the pinned system entries after the divider (round controls).</summary>
+        public bool IsPinned(int i) { return GroupStart >= 0 && i >= GroupStart; }
+
         /// <summary>Box of the glow around item <paramref name="i"/> (its final size; only its opacity changes).</summary>
         public Box GlowBox(int i, float scroll, int slide)
         {

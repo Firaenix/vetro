@@ -149,7 +149,7 @@ function fixture(options) {
     assert.equal(s.fixTizenTube, true, 'turning the launcher on keeps the choice');
     let tsv = fs.readFileSync(path.join(f.tmp, 'apps.tsv'), 'utf8');
     assert.ok(tsv.includes('tizentube\tTizenTube\txvvl3S1TT1.TizenTubeStandalone\t\t/opt/share/webappservice/apps_icon/all/yt/224x224.png\tcom.samsung.tv.cobalt-yt'), 'YouTube icon and kill-first in the list');
-    assert.deepEqual(s.entries.map(e => e.slug), ['tizentube', 'netflix', 'source', 'settings']);
+    assert.deepEqual(s.entries.map(e => e.slug), ['tizentube', 'netflix', 'source', 'settings', 'samsunghome']);
     assert.equal(s.entries[0].killFirst, 'com.samsung.tv.cobalt-yt');
     assert.equal(s.entries[2].system, true); assert.equal(s.entries[2].panel, true);
     assert.equal(s.entries[3].system, true); assert.equal(s.entries[1].system, false);

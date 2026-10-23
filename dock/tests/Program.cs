@@ -725,6 +725,8 @@ namespace Launcher.Tests
                 T.Eq(new DockLayout(5, 1920, 1080, 0, false, 0).GroupStart, -1, "group at 0 is no group");
                 T.Eq(new DockLayout(5, 1920, 1080, 0, false, 5).GroupStart, -1, "group at count is no group");
                 T.Eq(new DockLayout(5, 1920, 1080, 0, false, -3).GroupStart, -1, "negative is no group");
+                T.True(!l.IsPinned(10) && l.IsPinned(11) && l.IsPinned(12), "the system entries after the divider are the round ones");
+                T.True(!new DockLayout(5, 1920, 1080, 0, true, -1).IsPinned(4), "no group, nothing is round");
             });
 
             T.Run("layout: pinned system entries stay on screen while the apps scroll", () =>

@@ -23,7 +23,8 @@ CORNER = 29
 # slug -> (label, target, fallback app or None, accent)
 SYSTEM = {
     "source": ("Source", "panel:inputs", None, (90, 169, 255)),
-    "settings": ("Settings", "sys:com.samsung.tv.csfs", None, (196, 204, 220)),
+    "settings": ("Settings", "key:XF86SysMenu", "org.tizen.menu", (196, 204, 220)),
+    "samsunghome": ("Back to Samsung Home", "sys:com.samsung.tv.csfs", None, (196, 204, 220)),
 }
 
 
@@ -93,6 +94,12 @@ def _glyph_settings(d, c, acc):
     return ("hole", cx, cy, 12 * s, None)
 
 
+def _glyph_back(d, c, acc):
+    # "go back": a bent arrow, head on the left, the shaft turning down and returning to the right
+    _line(d, [(52, 40), (34, 58), (52, 76)], c, 9)
+    _line(d, [(34, 58), (74, 58)] + _arc(74, 76, 18, -90, 90) + [(52, 94)], c, 9)
+
+
 GLYPH_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "glyphs")
 
 
@@ -112,7 +119,7 @@ def _phosphor(name, box):
 
 
 # The line glyphs above stay as a fallback; the shipped look uses Phosphor bold so all three share one hand.
-GLYPHS = {"source": _phosphor("sign-in-bold", 58), "settings": _phosphor("gear-six-bold", 62)}
+GLYPHS = {"source": _phosphor("sign-in-bold", 58), "settings": _phosphor("gear-six-bold", 62), "samsunghome": _glyph_back}
 
 
 # The inputs panel: slug -> (label, Samsung SourceType, accent). TV is 0, HDMI 1-4 are 13-16.
