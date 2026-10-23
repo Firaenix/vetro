@@ -59,6 +59,10 @@ async function main() {
     assert.equal((await request('POST', '/dock', 'null')).status, 400);
     const bad = await request('POST', '/dock', '{"action":"format"}');
     assert.equal(bad.status, 409); assert.match(JSON.parse(bad.body).error, /Invalid dock action/);
+    const fix = await request('POST', '/dock', '{"action":"fixTizenTube","on":"yes"}');
+    assert.equal(fix.status, 409); assert.match(JSON.parse(fix.body).error, /Invalid value/);
+    assert.equal((await request('GET', '/dock/icon?slug=..%2F..%2Fetc%2Fpasswd')).status, 404);
+    assert.equal((await request('GET', '/dock/icon')).status, 404);
     const status = await request('GET', '/dock');
     assert.ok([200, 503].includes(status.status));
   });
