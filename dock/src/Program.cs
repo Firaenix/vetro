@@ -707,8 +707,26 @@ namespace Launcher
 
         // ------------------------------------------------------------------ entry point
 
+        /// <summary>
+        /// <c>--get-home</c>: prints which app the TV launches for the Home key and exits. A read-only look
+        /// at the default Home, to see whether the platform answers this call on a given TV.
+        /// </summary>
+        private static int GetHome()
+        {
+            try
+            {
+                IntPtr id;
+                int rc = Efl.app_operation_get_current_app("http://tizen.org/appcontrol/operation/main", out id);
+                Console.WriteLine("rc=" + rc);
+                Console.WriteLine("home=" + (id == IntPtr.Zero ? "(null)" : Marshal.PtrToStringAnsi(id)));
+                return rc == 0 ? 0 : 1;
+            }
+            catch (Exception ex) { Console.WriteLine("get-home failed: " + ex.Message); return 2; }
+        }
+
         private static int Main(string[] args)
         {
+            if (Flag(args, "--get-home")) return GetHome();
             _perf = Flag(args, "--perf");
             _dir = ResolveDir(args);
             _logPath = Path.Combine(_dir, "tvlauncher.log");
