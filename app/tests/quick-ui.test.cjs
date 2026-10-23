@@ -3,7 +3,12 @@ const assert=require('assert').strict,vm=require('vm');
 const html=require('../service/dashboard.js')();
 const nodes={};const el=id=>nodes[id]||(nodes[id]={id,value:'',hidden:true,textContent:'',innerHTML:'',disabled:false,focus(){}});
 const alexa=['com.samsung.tv.alexa-client','com.samsung.tv.alexa-fullscreen-app','com.samsung.tv.alexa-jump-starter','com.samsung.tv.wakeup-engine-alexa'];
-let apps=alexa.map((id,i)=>({appId:id,packageId:'com.samsung.tv.alexa-client',name:id,disabled:i===3}));
+let apps=alexa.map((id,i)=>({appId:id,packageId:'com.samsung.tv.alexa-client',name:id,disabled:i===3,area:'voice',role:'optional'}));
+apps.push({appId:'com.samsung.tv.acr-service-app',packageId:'com.samsung.tv.acr-service-app',name:'ACR',disabled:true,area:'tracking',role:'tracking'},
+ {appId:'com.samsung.tv.pisa-service',packageId:'com.samsung.tv.pisa-service',name:'pisa',disabled:false,area:'tracking',role:'tracking'},
+ {appId:'org.tizen.pisa-control-service',packageId:'com.samsung.tv.pisa-service',name:'pisa control',disabled:false,area:'tracking',role:'tracking'},
+ {appId:'com.samsung.tv.coba.adagent',packageId:'com.samsung.tv.coba.adagent',name:'coba-adagent',disabled:false,area:'tracking',role:'keep'},
+ {appId:'org.tizen.multi-assistant-service',packageId:'org.tizen.multi-assistant-service',name:'hub',disabled:false,area:'voice',role:'optional'});
 const calls=[];
 const sandbox={document:{getElementById:el,querySelectorAll:()=>[],querySelector:()=>null,addEventListener(){}},console,setTimeout(fn){return 1},clearTimeout(){},setInterval(){},
  fetch:async(url,opts)=>{const body=opts&&opts.body?JSON.parse(opts.body):null;calls.push({url,body});let data={};
@@ -26,7 +31,12 @@ const tick=()=>new Promise(r=>setImmediate(r));
  const memory=el('quickMemory').innerHTML;
  assert.match(memory,/Disable HbbTV/);assert.match(memory,/data-hbbtv-disable[^>]*checked[^>]*aria-label="Disable HbbTV"/,'HbbTV off: the win switch is on');assert.match(memory,/Done · HbbTV and its service are stopped/);
  assert.match(memory,/Disable MultiScreen autostart/);assert.match(memory,/data-win-switch="multiscreen" checked/);assert.match(memory,/Done · Multi View starts when you open it/);
- assert.doesNotMatch(memory,/Ambient/,'Ambient is not offered until what restarts it is known');
+ assert.match(memory,/Stop Ambient \(partial block\)/);assert.match(memory,/Samsung’s screen service starts the app again within seconds/,'the copy says the block is partial');
+ assert.match(memory,/Partly done · Samsung started it again/,'chosen but running again is shown as partly done');assert.doesNotMatch(memory,/data-win-switch="ambient" checked/);
+ const tracking=el('quickTracking').innerHTML;
+ assert.match(tracking,/Disable all advertising and tracking/);assert.match(tracking,/Partly done · 2 of 3 components still enabled/,'the Smart Hub ad agent (role keep) is not a member');
+ assert.doesNotMatch(tracking,/coba\.adagent/);
+ assert.match(voice,/Disable all voice assistants/);assert.match(voice,/Partly done · 4 of 5 components still enabled/,'the assistant hub is a member of the all-in switch');
  assert.match(el('quickControl').innerHTML,/Disable automatic firmware update/);assert.doesNotMatch(el('quickControl').innerHTML,/data-win-switch="firmware" checked/);
  assert.doesNotMatch(html,/quick wins applied|quickScore/,'no progress counter');
  assert.doesNotMatch(el('quickPrivacy').innerHTML,/Yes|No</);assert.match(el('quickPrivacy').innerHTML,/Disable viewing-data tracking/);

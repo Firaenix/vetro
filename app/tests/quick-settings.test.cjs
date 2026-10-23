@@ -36,5 +36,22 @@ function harness(opts){
  await assert.rejects(quick.apply('nope',true,h.deps),/Unknown quick setting/);
  await assert.rejects(quick.apply('alexa','yes',h.deps),/Invalid state/);
  h=harness({disabled:[],registryError:true});await assert.rejects(quick.apply('alexa',true,h.deps),/App registry unavailable/);
+ // Area groups: members are whatever the Task manager files under the area, minus role keep and protected components
+ {
+  const trk=[{appId:'t.one',packageId:'t.one',area:'tracking',role:'tracking',disabled:false},{appId:'org.tizen.pisa-control-service',packageId:'com.samsung.tv.pisa-service',area:'tracking',role:'tracking',disabled:true},
+   {appId:'com.samsung.tv.coba.adagent',packageId:'com.samsung.tv.coba.adagent',area:'tracking',role:'keep',disabled:false},{appId:'com.samsung.tv.coba.adagent.res',packageId:'com.samsung.tv.coba.adagent',area:'tracking',role:'tracking',disabled:false},
+   {appId:'vetrotvapp.svc',packageId:'vetrotvapp',area:'tracking',role:'tracking',disabled:false},{appId:'other',packageId:'other',area:'voice',role:'optional',disabled:false}];
+  const g=quick.find('tracking-all'),st=quick.state(g,trk);
+  assert.deepEqual(st.installed,['t.one','org.tizen.pisa-control-service'],'keep, Smart Hub ad agent, Vetro and other areas are not members');assert.equal(st.status,'partial');
+  assert.equal(quick.state(g,[]).status,'unavailable');
+  assert.deepEqual(quick.state(quick.find('voice-all'),trk).installed,['other']);
+  assert.equal(quick.find('voice-all').microphone,true);assert.ok(quick.ALLOWED_IDS.indexOf('t.one')<0,'area groups add no fixed ids');
+  const live=new Set(['t.one']),sent=[];
+  const deps={invalidate(){},inventory(){return Promise.resolve({apps:trk.map(r=>({...r,disabled:r.appId==='t.one'?!live.has('t.one')?true:false:r.disabled})).map(r=>r.appId==='t.one'?{...r,disabled:!live.has('t.one')}:r)});},
+   execute(cmd){const c=decode(cmd);sent.push(c);if(c==='app_launcher -S')return Promise.resolve({exit_code:0,stdout:'\tt.one (7)\n\tother (8)\n'});
+    const m=/for id in (.*); do (pkgcmd (-D|-A)|app_launcher -k)/.exec(c);const ids=m[1].split(' ');if(m[2]==='pkgcmd -D')ids.forEach(id=>{if(id==='t.one')live.delete(id);});return Promise.resolve({exit_code:0,stdout:ids.map(id=>id+' 0').join('\n')});}};
+  const r=await quick.apply('tracking-all',true,deps);
+  assert.deepEqual(r.changed,['t.one']);assert.deepEqual(r.stopped,['t.one'],'only running members of the group are stopped, not other apps');assert.equal(r.state.status,'off');
+ }
  console.log('PASS quick settings: group state, one-script apply, verified readback, rollback, stop of running members, exclusions');
 })().catch(e=>{console.error(e);process.exitCode=1});

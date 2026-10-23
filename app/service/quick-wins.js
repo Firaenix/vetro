@@ -9,7 +9,9 @@
 //             after that starts cold. Nothing is replaced: removing the file puts everything back.
 //   ambient   ambient_start.sh (read-only, on the firmware image) waits 15 s after boot and then starts
 //             AmbientApp in the background until app_launcher says "successfully launched", then exits.
-//             The script stays as it is; Vetro stops the app once it is up, at every boot.
+//             The script stays as it is; Vetro stops the app once it is up, at every boot. The block is partial:
+//             screend (Samsung's screen daemon) watches org.tizen.ambientapp and starts it again after a stop,
+//             because the model has the firmware feature com.samsung/featureconf/ambient_screen_support.
 //
 // HbbTV has its own module (hbbtv.js) because its menu value must be restored exactly.
 var execError = require('./exec-error.js');
@@ -66,7 +68,7 @@ function Wins(execute, options) {
     this.file = options.file || FILE;
     this.sleep = options.sleep || function (ms) { return new Promise(function (resolve) { setTimeout(resolve, ms); }); };
     this.bootId = options.bootId || function () { try { return fs.readFileSync('/proc/sys/kernel/random/boot_id', 'utf8').trim(); } catch (e) { return null; } };
-    // Ambient is not offered in the dashboard (see CHANGELOG): a saved choice from an earlier build is not acted on.
+    // Only tests and older builds that do not offer the Ambient win set this: a saved choice is then not acted on.
     this.skipAmbient = !!options.skipAmbient;
     this.busy = false;
 }
