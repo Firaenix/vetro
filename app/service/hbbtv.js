@@ -11,7 +11,8 @@ var execError = require('./exec-error.js');
 var fs=require('fs'),KEY='db/menu/system/data-service',FILE='/opt/usr/home/owner/share/vetro-hbbtv.json';
 var APP='org.tizen.hbbtv',FLAG='/tmp/hbbtv_do-not-relaunch';
 var RUNNING='app_launcher -S 2>/dev/null | grep -q "^[[:space:]]*org\\.tizen\\.hbbtv[[:space:]]"';
-var STOP='if '+RUNNING+'; then app_launcher -t '+APP+'; fi';
+// -t may exit non-zero when the app is already gone, and the process can take a moment to leave the list: wait up to 5 s.
+var STOP='if '+RUNNING+'; then app_launcher -t '+APP+' || true; i=0; while '+RUNNING+' && [ $i -lt 10 ]; do sleep 0.5; i=$((i+1)); done; fi';
 function wrap(s){return 'echo '+Buffer.from(s).toString('base64')+' | base64 -d | sh';}
 function check(r){if(r.exit_code||r.timed_out)throw execError.failed(r,r.stderr||r.stdout||'HbbTV unavailable');return r.stdout||'';}
 function Control(execute,storage){this.execute=execute;this.fs=storage||fs;this.busy=false;}
@@ -45,4 +46,4 @@ Control.prototype.enforce=function(){var self=this;
  return this.read().then(function(s){if(!s.valueOff)return {stopped:false,reason:'HbbTV is on in the menu'};
   if(s.flag&&!s.running)return {stopped:false,reason:'already off'};
   return self.execute(wrap('touch '+FLAG+'\n'+STOP+'\nsleep 1\ntrue'),15000).then(check).then(function(){return {stopped:true};});});};
-module.exports={Control:Control,KEY:KEY,FILE:FILE,FLAG:FLAG};
+module.exports={Control:Control,KEY:KEY,FILE:FILE,FLAG:FLAG,STOP:STOP};

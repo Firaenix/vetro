@@ -546,10 +546,10 @@ var groupTitles={acr:'Disable viewing-data tracking',alexa:'Disable Alexa',googl
 var winCopy={
  hbbtv:{title:'Disable HbbTV',desc:'Stops the red-button data service and keeps it from coming back after a source change or a restart. Frees about 22 MB of memory.',
   detail:'Sets the HbbTV menu value to Off, stops the app and blocks its relaunch until the next restart, where Vetro does it again. Switch off to restore the previous value.'},
- multiscreen:{title:'Disable MultiScreen autostart',desc:'Samsung loads Multi View in the background at every start. This stops that; Multi View still opens when you ask for it, and its first launch takes a few seconds longer. Frees about 15 MB.',
+ multiscreen:{title:'Disable MultiScreen autostart',desc:'Samsung loads Multi View in the background at every restart of the TV. This stops that; Multi View still opens when you ask for it, and its first launch takes a few seconds longer. Frees about 15 MB.',
   detail:'Adds the file disable_preloading that Samsung’s own start-up unit checks, and stops the app now. Switch off to remove the file; nothing else is changed.'},
- ambient:{title:'Disable Ambient autostart',desc:'Samsung starts the Ambient app 15 seconds after every start. Vetro stops it once it is up. The Ambient key starts it again when you press it. Frees about 20 MB.',
-  detail:'Stops org.tizen.ambientapp now and after each start. Samsung’s start-up script and the system image are not touched. Switch off to start it again.'},
+ ambient:{title:'Disable Ambient autostart',desc:'Samsung starts the Ambient app 15 seconds after every restart of the TV. Vetro stops it once it is up. The Ambient key starts it again when you press it. Frees about 20 MB.',
+  detail:'Stops org.tizen.ambientapp now and once after each restart of the TV. Samsung’s start-up script and the system image are not touched. Switch off to start it again.'},
  firmware:{title:'Disable automatic firmware update',desc:'Same as Support › Software Update › Auto update. A new firmware can remove root access, so updates only happen when you start them.',
   detail:'Writes 0 to db/menu/support/softwareupdate/autoupdate and reads it back. Switch off to restore the previous value.'}
 };
@@ -573,8 +573,8 @@ function groupItem(g){
 function winItem(id){
  var c=winCopy[id],st=winState(id),w=quickData.wins&&quickData.wins.wins[id]||{},busy=quickBusy||winsBusy;
  var state=!quickData.wins?chip(quickData.winsError||'Reading…',quickData.winsError?'partial':''):st==='unknown'?chip('Not available on this TV','partial'):'';
- if(quickData.wins&&st==='on')state=chip(id==='firmware'?'Done · Auto update is off':id==='multiscreen'?'Done · Multi View starts when you open it':'Done · stopped now and after each start','on');
- if(st==='partial')state=chip('Chosen, but the app is running again · it is stopped at the next start','partial');
+ if(quickData.wins&&st==='on')state=chip(id==='firmware'?'Done · Auto update is off':id==='multiscreen'?'Done · Multi View starts when you open it':'Done · stopped now and after each restart','on');
+ if(st==='partial')state=chip('Chosen, but the app is running again · it is stopped at the next restart','partial');
  if(st==='off'&&w.running)state=chip('Running now','');
  var control=quickData.wins&&st&&st!=='unknown'?switchMarkup('data-win-switch="'+id+'"',st==='on',busy,c.title):'';
  return quickItem(id,c.title,c.desc,state,control,'<details><summary>What this changes</summary><p>'+esc(c.detail)+'</p></details>');
@@ -641,8 +641,8 @@ var winsBusy=false;
 function winMessage(id,on,d){
  if(d.changed===false)return winCopy[id].title+': already in the requested state.';
  if(id==='firmware')return 'Auto update '+(on?'off':'on')+'; value '+d.previous+' → '+d.value+' read back from the TV.';
- if(id==='multiscreen')return 'MultiScreen autostart '+(on?'disabled: the preload file is in place and the app is stopped':'back on: the preload file is removed')+' (read back). '+(on?'Multi View still opens on demand.':'It loads again at the next start.');
- return 'Ambient autostart '+(on?'disabled: the app is stopped and will be stopped after each start':'back on: Samsung’s own start was run again')+'.';
+ if(id==='multiscreen')return 'MultiScreen autostart '+(on?'disabled: the preload file is in place and the app is stopped':'back on: the preload file is removed')+' (read back). '+(on?'Multi View still opens on demand.':'It loads again at the next restart.');
+ return 'Ambient autostart '+(on?'disabled: the app is stopped and will be stopped after each restart':'back on: Samsung’s own start was run again')+'.';
 }
 function setWin(id,on){
  if(quickBusy||winsBusy||!winCopy[id])return;winsBusy=true;renderQuick();

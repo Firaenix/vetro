@@ -32,7 +32,11 @@ function check(r) {
     return r.stdout || '';
 }
 function running(id) { return 'app_launcher -S 2>/dev/null | grep -q "^[[:space:]]*' + id.replace(/\./g, '\\.') + '[[:space:]]"'; }
-function stop(id) { return 'if ' + running(id) + '; then app_launcher -t ' + id + '; fi'; }
+// -t may exit non-zero when the app is already gone (the scripts run under set -e), and the process can take a
+// moment to leave the list: wait up to 5 s.
+function stop(id) {
+    return 'if ' + running(id) + '; then app_launcher -t ' + id + ' || true; i=0; while ' + running(id) + ' && [ $i -lt 10 ]; do sleep 0.5; i=$((i+1)); done; fi';
+}
 
 var READ = [
     'echo "AU|$(vconftool get ' + AUTOUPDATE + ' 2>&1)"',
@@ -188,4 +192,4 @@ Wins.prototype.boot = function (hbbtv) {
     });
 };
 
-module.exports = {Wins: Wins, parse: parse, IDS: IDS, FILE: FILE, AUTOUPDATE: AUTOUPDATE, MULTISCREEN_FLAG: MULTISCREEN_FLAG, AMBIENT_ID: AMBIENT_ID, MULTISCREEN_ID: MULTISCREEN_ID};
+module.exports = {Wins: Wins, stop: stop, parse: parse, IDS: IDS, FILE: FILE, AUTOUPDATE: AUTOUPDATE, MULTISCREEN_FLAG: MULTISCREEN_FLAG, AMBIENT_ID: AMBIENT_ID, MULTISCREEN_ID: MULTISCREEN_ID};
