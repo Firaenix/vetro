@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>netcoreapp3.1</TargetFramework>
+    <AssemblyName>tvlauncher-dotnet</AssemblyName>
+    <RootNamespace>Launcher</RootNamespace>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <!-- Runtime knobs for a small, quiet process: no background GC thread, workstation GC. -->
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
+    <ServerGarbageCollector>false</ServerGarbageCollector>
+    <TieredCompilation>true</TieredCompilation>
+    <UseSystemResourceKeys>true</UseSystemResourceKeys>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Remove="tests/**;old/**;bin/**;obj/**" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Glass assets shared with tools/make-glass.cjs, then the generated apps.tsv and icons. -->
+    <None Include="../res/shadow.png;../res/dock_bg.png;../res/glass_tile.png;../res/dock_glow.png;../res/chev_up.png;../res/chev_down.png"
+          Link="res/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="res/**" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="run.sh" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>
