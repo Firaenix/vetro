@@ -41,7 +41,11 @@ The component drawer brings together app state, running processes, startup contr
 
 **Disable** keeps a component installed and can be reversed with Enable. **Stop** ends its current process. **Uninstall** removes an eligible package and requires an installer to recover it. App state, boot flags and running processes are shown separately so you can check what actually changed.
 
-Quick settings and Debloater share the same inventory: switch off an assistant in one, and its disabled components appear in the other.
+Quick settings and Task manager (the former Debloater) share the same inventory: disable an assistant in one, and its disabled components appear in the other.
+
+## Quick settings: quick wins
+
+Quick settings is the first panel. Each switch is a win, worded as what you get, and *on* means it is applied: **Disable HbbTV**, **Disable MultiScreen autostart**, **Disable Ambient autostart** (these three free memory), **Disable viewing-data tracking** (ACR), **Block ad and tracking domains** and **Disable automatic firmware update**, plus the voice assistants. A chip says *Done* or *Partly done*, and every win can be switched back. The memory figures come from a process survey of a Q80A; the effect of the new switches on a running TV is still being verified. Launcher (beta) and Remapper (the former Remote panel) sit next to it at the top of the navigation.
 
 ## More privacy, fewer voice services
 
@@ -84,7 +88,7 @@ There is no confirmed blanket Tizen version range. Firmware patches, runtime sup
 
 | Feature | What you can do |
 | --- | --- |
-| Remote shortcuts | Map supported physical remote buttons to native app launches and actions; save interception across restarts. |
+| Remapper (remote shortcuts) | Map supported physical remote buttons to native app launches and actions; save interception across restarts. |
 | TV settings | Adjust supported picture controls and selected advanced settings, with readback and restore handling. |
 | MQTT & Home Assistant | Connect a broker, publish state and discovery, and trigger actions from exact topics. [Setup guide](app/docs/mqtt/README.md). |
 | Diagnostics | Download a redacted compatibility report for review before sharing it in an issue. [Report format](app/docs/DIAGNOSTIC-EXPORT.md). |

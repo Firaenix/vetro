@@ -25,6 +25,7 @@ var dnsFilter = new (require('./local-dns.js').Filter)(agentExecute);
 var homeOrder = new (require('./home-order.js').Order)(agentExecute);
 var dock = new (require('./dock.js').Dock)({execute: agentExecute});
 var hbbtv = new (require('./hbbtv.js').Control)(agentExecute);
+var wins = new (require('./quick-wins.js').Wins)(agentExecute);
 var presence = new (require('./presence.js').Presence)(agentExecute);
 var tvState = new (require('./tv-state.js').Store)(agentExecute);
 var privacy = new (require('./privacy.js').Privacy)(agentExecute);
@@ -402,6 +403,19 @@ function handleQuick(req,res) {readJsonBody(req,res,function(p){
     quickSettings.apply(p.id,p.off,{execute:agentExecute,inventory:inventory,invalidate:function(){registryAt=0;}})
         .then(function(d){debloatBusy=false;serveJson(res,d);}).catch(function(e){debloatBusy=false;serveJson(res,{ok:false,error:e.message},e.statusCode||503);});
 });}
+function handleWins(req,res) {readJsonBody(req,res,function(p){
+    if(debloatBusy)return serveJson(res,{ok:false,error:'App change already in progress'},409);debloatBusy=true;
+    wins.apply(p.id,p.on).then(function(d){debloatBusy=false;serveJson(res,d);}).catch(function(e){debloatBusy=false;serveJson(res,{ok:false,error:e.message},409);});
+});}
+// Vetro's own app icon, shown in the dashboard. It ships in the package next to the service folder.
+var iconPng=null;
+function serveIcon(res) {
+    try {
+        if(!iconPng)iconPng=fs.readFileSync(require('path').join(__dirname,'..','icon.png'));
+        res.writeHead(200,{'content-type':'image/png','cache-control':'public, max-age=86400','content-length':iconPng.length});
+        res.end(iconPng);
+    } catch(e) { serveJson(res,{error:'icon unavailable'},404); }
+}
 function handleLeftovers(req,res) {
     if(req.method==='GET')return leftovers.list().then(function(d){serveJson(res,d);}).catch(function(e){serveJson(res,{error:e.message},503);});
     readJsonBody(req,res,function(p){
@@ -557,7 +571,8 @@ http.createServer(function (req, res) {
         if (url === '/exec') return handleExec(req, res);
         if (url === '/debloat') return handleDebloatAction(req, res);
         if (url === '/dns') return readJsonBody(req,res,function(p){var task=p.action==='observe'?dnsFilter.observe():p.action==='apply'?dnsFilter.apply(p.enabled,p.domains):Promise.reject(Error('Invalid filter action'));task.then(function(d){serveJson(res,d)}).catch(function(e){serveJson(res,{error:e.message},503)});});
-        if (url === '/hbbtv') return readJsonBody(req,res,function(p){hbbtv.change(p.off,p.expected).then(function(d){privacy.cached=null;serveJson(res,d);}).catch(function(e){serveJson(res,{error:e.message},409);});});
+        if (url === '/wins') return handleWins(req,res);
+        if (url === '/hbbtv') return readJsonBody(req,res,function(p){hbbtv.change(p.off,p.expected).then(function(d){privacy.cached=null;try{wins.remember('hbbtv',d.off);}catch(e){}serveJson(res,d);}).catch(function(e){serveJson(res,{error:e.message},409);});});
         if (url === '/dock') return readJsonBody(req,res,function(p){var t=p.action==='enable'?dock.enable():p.action==='disable'?dock.disable():p.action==='refresh'?dock.refresh():p.action==='fixTizenTube'?dock.setFixTizenTube(p.on):Promise.reject(Error('Invalid dock action'));t.then(function(d){serveJson(res,d)}).catch(function(e){serveJson(res,{ok:false,error:e.message},409)});});
         if (url === '/home-order') return readJsonBody(req,res,function(p){var t=p.action==='restore'?homeOrder.restore():homeOrder.write(p.entries);t.then(function(d){serveJson(res,d)}).catch(function(e){serveJson(res,{error:e.message},409)});});
         if (url === '/tv-menu') return readJsonBody(req,res,function(p){menuSettings.write(p.id,p.value).then(function(d){serveJson(res,d)}).catch(function(e){serveJson(res,{ok:false,error:e.message},409)});});
@@ -577,6 +592,8 @@ http.createServer(function (req, res) {
     if (url === '/dock/icon') {var slug=require('url').parse(req.url,true).query.slug,png=dock.iconFile(slug);if(!png)return serveJson(res,{error:'icon unavailable'},404);res.writeHead(200,{'content-type':'image/png','cache-control':'private, max-age=60','X-Content-Type-Options':'nosniff'});return res.end(png);}
     if (url === '/dock') return dock.status().then(function(d){serveJson(res,d)}).catch(function(e){serveJson(res,{error:e.message},503)});
     if (url === '/home-order') return homeOrder.read().then(function(d){serveJson(res,d)}).catch(function(e){serveJson(res,{error:e.message},503)});
+    if (url === '/wins') return wins.read().then(function(d){serveJson(res,d)}).catch(function(e){serveJson(res,{error:e.message},503)});
+    if (url === '/icon.png') return serveIcon(res);
     if (url === '/hbbtv') return hbbtv.read().then(function(d){serveJson(res,d);}).catch(function(e){serveJson(res,{error:e.message},503);});
     if (url === '/privacy') return privacy.read().then(function(d){serveJson(res,d)}).catch(function(e){serveJson(res,{error:e.message},503)});
     if (url === '/tv-menu') { var q=/[?&]id=([^&]+)/.exec(req.url||''), menuId=null; try { if(q)menuId=decodeURIComponent(q[1]); } catch(e) { return serveJson(res,{error:'Invalid menu ID'},400); } return (q?menuSettings.read(menuId):menuSettings.load()).then(function(d){serveJson(res,d)}).catch(function(e){serveJson(res,{error:e.message},503)}); }
@@ -639,3 +656,7 @@ var tvStateTimer=setInterval(function(){
 
 // Restore only an explicitly saved local domain filter once the adapter is ready.
 var dnsRestoreAttempts=0;var dnsRestoreTimer=setInterval(function(){if(++dnsRestoreAttempts>12){clearInterval(dnsRestoreTimer);return}if(platform.status().agent.connected){dnsFilter.restore().then(function(s){if(!s.enabled||s.applied)clearInterval(dnsRestoreTimer)}).catch(function(){})}},5000);if(dnsRestoreTimer.unref)dnsRestoreTimer.unref();
+
+// Quick wins that need a task after every boot (HbbTV's flag lives in /tmp, AmbientApp is started by the firmware
+// 15 s after boot). Runs once the adapter is connected; the choice was saved by Vetro when the win was switched on.
+var winsBootAttempts=0;var winsBootTimer=setInterval(function(){if(++winsBootAttempts>60){clearInterval(winsBootTimer);return}if(platform.status().agent.connected){clearInterval(winsBootTimer);wins.boot(hbbtv).catch(function(){})}},5000);if(winsBootTimer.unref)winsBootTimer.unref();

@@ -22,7 +22,7 @@ async function main() {
     try { await fn(); console.log('PASS ' + name); }
     catch (e) { failed++; console.log('FAIL ' + name + ': ' + e.message); }
   }
-  for (const route of ['/control', '/debloat', '/mqtt', '/install', '/exec']) {
+  for (const route of ['/control', '/debloat', '/mqtt', '/install', '/exec', '/wins']) {
     await check('POST ' + route + ' null returns 400 without throwing', async function () {
       const response = await request('POST', route, 'null');
       assert.equal(response.status, 400);
