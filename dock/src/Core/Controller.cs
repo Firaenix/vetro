@@ -135,9 +135,10 @@ namespace Launcher.Core
             switch (key)
             {
                 case "Left":
-                    return MoveTo(FocusTarget - 1);
+                    // The pills are one column: Left leaves it for the last app.
+                    return MoveTo(_layout.IsPinned(FocusTarget) ? _layout.GroupStart - 1 : FocusTarget - 1);
                 case "Right":
-                    return MoveTo(FocusTarget + 1);
+                    return _layout.IsPinned(FocusTarget) ? KeyAction.None : MoveTo(FocusTarget + 1);
                 case "Home":
                     return MoveTo(0);
                 case "End":
@@ -148,8 +149,11 @@ namespace Launcher.Core
                     launchIndex = FocusTarget;
                     return KeyAction.Launch;
                 case "Up":
+                    // Inside the column of pills Up climbs it; from the top one (or an app) it opens the inputs page.
+                    if (_layout.IsPinned(FocusTarget) && FocusTarget > _layout.GroupStart) return MoveTo(FocusTarget - 1);
                     return Kind == PageKind.Apps && PanelEnabled ? KeyAction.OpenPanel : KeyAction.None;
                 case "Down":
+                    if (_layout.IsPinned(FocusTarget)) return MoveTo(FocusTarget + 1);
                     return Kind == PageKind.Panel ? KeyAction.Back : KeyAction.None;
                 case "Escape":
                 case "XF86Back":

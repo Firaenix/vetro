@@ -243,13 +243,13 @@ def render(slug, path):
     if extra and extra[0] == "image":
         layer = extra[1]
     g = layer.crop(layer.getchannel("A").getbbox())
-    gh = 32 * SS
+    gh = 26 * SS
     g = g.resize((max(1, round(g.width * gh / g.height)), gh), Image.LANCZOS)
-    font = _pill_font(26 * SS)
+    font = _pill_font(22 * SS)
     probe = ImageDraw.Draw(Image.new("RGBA", (8, 8)))
     tb = probe.textbbox((0, 0), label, font=font)
     tw, th = tb[2] - tb[0], tb[3] - tb[1]
-    gap = 12 * SS
+    gap = 10 * SS
     total = g.width + gap + tw
     x0 = (tile.width - total) // 2
     out = tile.copy()

@@ -232,7 +232,7 @@ renderPng('glass_tile_focus', S, S, [R, R, R, R], glass(true));
 renderPng('shadow', S, S, [0, 0, 0, 0], shadow());
 renderPng('sheet_bg', S, S, [46, 46, 0, 0], sheet());
 renderPng('dock_glow', 180, 180, [0, 0, 0, 0], focusGlow(180, 132, 30));   // 180 = FocusIcon + 2 * HighlightPad
-renderPng('dock_glow_pill', 352, 120, [0, 0, 0, 0], focusGlowBox(352, 120, 304, 72, 36));   // pinned pills: FocusIcon-like final size, capsule outline
+renderPng('dock_glow_pill', 264, 80, [0, 0, 0, 0], focusGlowBox(264, 80, 232, 48, 24));   // pinned pills: FocusIcon-like final size, capsule outline
 renderPng('dock_bg', S, S, [46, 46, 46, 46], dock());
 
 // soft radial glow for the focused item

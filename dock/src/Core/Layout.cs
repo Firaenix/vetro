@@ -38,9 +38,11 @@ namespace Launcher.Core
         public const int GroupGap = 56;
         public const int Pitch = Icon + Gap;
         /// <summary>The pinned system entries are oval pills (icon and name drawn into one image) of this fixed size.</summary>
-        public const int PillItemW = 304;
-        public const int PillItemH = 72;
-        public const int PillItemGap = 16;
+        public const int PillItemW = 232;
+        public const int PillItemH = 48;
+        public const int PillItemGap = 8;
+        /// <summary>Reach of the capsule glow around a focused pill (smaller than the icons': the pills are stacked close together).</summary>
+        public const int PillGlowPad = 16;
         /// <summary>Smallest space kept between the label and the clock; with less, the clock is not drawn.</summary>
         public const int ClockGap = 16;
         // Room for the navigation hint ("Input" above the apps, "Back" below the inputs): HintH is the
@@ -89,7 +91,7 @@ namespace Launcher.Core
             AppCount = GroupStart < 0 ? count : GroupStart;
             PinnedCount = count - AppCount;
             AppsW = AppCount * Icon + (AppCount - 1) * Gap;
-            PinnedW = PinnedCount == 0 ? 0 : PinnedCount * PillItemW + (PinnedCount - 1) * PillItemGap;
+            PinnedW = PinnedCount == 0 ? 0 : PillItemW;      // the pills are stacked in one column
             int fixedW = PinnedCount == 0 ? 0 : GroupGap + PinnedW;
             ContentW = AppsW + fixedW;
             int maxPill = screenW - 2 * Margin - 2 * ScreenSideGap;
@@ -119,7 +121,7 @@ namespace Launcher.Core
         /// </summary>
         public float ItemCenter(int i, float scroll)
         {
-            if (GroupStart >= 0 && i >= GroupStart) return ViewportW + GroupGap + PillItemW / 2f + (i - GroupStart) * (PillItemW + PillItemGap);
+            if (GroupStart >= 0 && i >= GroupStart) return ViewportW + GroupGap + PillItemW / 2f;
             return CenterOf(i) - scroll;
         }
 
@@ -156,7 +158,7 @@ namespace Launcher.Core
                 Box p;
                 p.W = PillItemW; p.H = PillItemH;
                 p.X = (int)Math.Round(Left + PadX + ItemCenter(i, scroll)) - PillItemW / 2;
-                p.Y = RowCenterY - PillItemH / 2 + slide;
+                p.Y = PillTop(i) + slide;
                 return p;
             }
             float amount = Amount(focusPos, i);
@@ -184,19 +186,28 @@ namespace Launcher.Core
             weightSecond = second == first ? 0f : p - first;
         }
 
+        /// <summary>Window-relative y of the top of pinned item <paramref name="i"/>: the pills are stacked and the stack is centred on the icon row.</summary>
+        public int PillTop(int i)
+        {
+            int stackH = PinnedCount * PillItemH + (PinnedCount - 1) * PillItemGap;
+            return RowCenterY - stackH / 2 + (i - GroupStart) * (PillItemH + PillItemGap);
+        }
+
         /// <summary>True for the pinned system entries after the divider (the oval pills).</summary>
         public bool IsPinned(int i) { return GroupStart >= 0 && i >= GroupStart; }
 
         /// <summary>Box of the glow around item <paramref name="i"/> (its final size; only its opacity changes).</summary>
         public Box GlowBox(int i, float scroll, int slide)
         {
-            int w = IsPinned(i) ? PillItemW + 2 * HighlightPad : FocusIcon + 2 * HighlightPad;
-            int h = IsPinned(i) ? PillItemH + 2 * HighlightPad : w;
+            bool pill = IsPinned(i);
+            int pad = pill ? PillGlowPad : HighlightPad;
+            int w = (pill ? PillItemW : FocusIcon) + 2 * pad;
+            int h = (pill ? PillItemH : FocusIcon) + 2 * pad;
             int cx = (int)Math.Round(Left + PadX + ItemCenter(i, scroll));
             Box b;
             b.W = w; b.H = h;
             b.X = cx - w / 2;
-            b.Y = RowCenterY - h / 2 + slide;
+            b.Y = (pill ? PillTop(i) - pad : RowCenterY - h / 2) + slide;
             return b;
         }
 

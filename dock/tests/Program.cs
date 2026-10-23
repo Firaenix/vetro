@@ -727,7 +727,24 @@ namespace Launcher.Tests
                 T.Eq(new DockLayout(5, 1920, 1080, 0, false, -3).GroupStart, -1, "negative is no group");
                 T.True(!l.IsPinned(7) && l.IsPinned(8) && l.IsPinned(9), "the system entries after the divider are the pills");
                 T.Eq(l.IconBox(8, 8f, 0f, 0).W, DockLayout.PillItemW, "a focused pill does not grow");
-                T.Eq(l.GlowBox(8, 0f, 0).W, DockLayout.PillItemW + 2 * DockLayout.HighlightPad, "its glow is the capsule size");
+                T.Eq(l.GlowBox(8, 0f, 0).W, DockLayout.PillItemW + 2 * DockLayout.PillGlowPad, "its glow is the capsule size");
+                var p1 = l.IconBox(8, 0f, 0f, 0); var p2 = l.IconBox(9, 0f, 0f, 0);
+                T.Eq(p1.X, p2.X, "the pills are one column");
+                T.Eq(p2.Y - (p1.Y + p1.H), DockLayout.PillItemGap, "stacked with the small gap");
+                T.Eq((p1.Y + p2.Y + p2.H) / 2, l.RowCenterY, "the stack is centred on the icon row");
+                T.True(p1.Y >= l.Top + DockLayout.PadTop - 20 && p2.Y + p2.H <= l.Top + DockLayout.PadTop + DockLayout.FocusIcon + 20, "inside the icon row band");
+                T.Eq(l.PinnedW, DockLayout.PillItemW, "the pinned group is as wide as one pill");
+                var nav = new Controller(l) { PanelEnabled = true };
+                nav.Show(); int ni;
+                nav.Key("End", out ni);
+                T.Eq(nav.FocusTarget, 9, "End goes to the last pill");
+                T.Eq(nav.Key("Up", out ni), KeyAction.Moved, "Up climbs the column"); T.Eq(nav.FocusTarget, 8, "top pill");
+                T.Eq(nav.Key("Up", out ni), KeyAction.OpenPanel, "Up from the top pill opens the inputs page");
+                T.Eq(nav.Key("Down", out ni), KeyAction.Moved, "Down goes to the lower pill"); T.Eq(nav.FocusTarget, 9, "bottom pill");
+                T.Eq(nav.Key("Down", out ni), KeyAction.None, "nothing below the last pill");
+                T.Eq(nav.Key("Right", out ni), KeyAction.None, "nothing to the right of the column");
+                T.Eq(nav.Key("Left", out ni), KeyAction.Moved, "Left leaves the column"); T.Eq(nav.FocusTarget, 7, "for the last app");
+                T.Eq(nav.Key("Right", out ni), KeyAction.Moved, "Right enters the column again"); T.Eq(nav.FocusTarget, 8, "at the top pill");
                 T.True(!new DockLayout(5, 1920, 1080, 0, true, -1).IsPinned(4), "no group, nothing is round");
             });
 
