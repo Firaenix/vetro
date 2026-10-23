@@ -63,12 +63,14 @@ The dashboard uses plain HTTP and currently has no browser login. Keep it on a t
 
 ## Compatibility
 
-**Vetro has been tested by the maintainer on one physical TV only;** one community diagnostic report from a second model is listed below. The root technique may work more broadly: the upstream [SDK archive-launcher route](https://github.com/chris-ritsen/samsung-tv-root#archive-root-route) is model-independent and has been demonstrated on QN90B and QN90F. That is evidence for the technique, not confirmation that Vetro's packaged integration or controls work on those TVs.
+**Vetro has been tested by the maintainer on one physical TV only;** community diagnostic reports from other models are listed below. The root technique may work more broadly: the upstream [SDK archive-launcher route](https://github.com/chris-ritsen/samsung-tv-root#archive-root-route) is model-independent and has been demonstrated on QN90B and QN90F. That is evidence for the technique, not confirmation that Vetro's packaged integration or controls work on those TVs.
 
 | TV / platform | Firmware | Evidence | Vetro status |
 | --- | --- | --- | --- |
 | **Q80A — QE50Q80AATXZT**, Tizen 6, ARMv7 | **T-NKM2DEUC-2301.1** | Vetro installed; authenticated root agent and device controls verified. | **Tested on one TV** |
 | Q67B — QE43Q67BAUXXH (2022) | T-NKLBDEUC-1720.7 | Community diagnostic report from Vetro 0.2.3: app and service running, authenticated root agent reported with UID 0, app-disable flags set. Not confirmed: persistence after a cold boot, system service listing (that report section was unavailable) and device controls. | **Reported working**; not verified by the maintainer |
+| Q70A — QE55Q70AATXXC (2021) | T-NKM2DEUC-2301.1 | Community report from Vetro 0.2.3: installed with root access and the dashboard working; Quick settings, the Debloater and domain blocking were used. The diagnostic export lists 29 controls as confirmed against the TV's own method list. Cold-boot persistence was not reported. | **Reported working**; not verified by the maintainer |
+| QN85A — GQ65QN85AATXZG (2021) | T-NKM2DEUC-2301.1 | Community report from Vetro 0.2.3 (platform 21_NIKEM2_QTV): app, service and the authenticated UID-0 agent working, with automatic recovery of both after a reboot (new boot ID; not an AC power-removal test). The reporter had to enable the service's on-boot and auto-restart flags in the package database first. Device controls were not written. | **Reported working**; not verified by the maintainer |
 | QN90B — QN55QN90BAFXZA, Tizen 6.5, ARMv7 | T-PTMAKUC-1602.3 | Upstream root testing, including the archive-launcher route. | Untested |
 | QN90F — QN75QN90FAFXZA / QA55QN90FAUXEG, Tizen 9.0, AArch64 | 1203.0 / 1301.0 | Upstream root testing on both firmwares; the archive route is also demonstrated on QN90F, without a separate firmware matrix. | Untested; architecture/runtime differences may require adaptation |
 | S90D | Exact OS/firmware not established here | An owner reported the underlying route; upstream has not run its exact archive implementation on this model. | Untested |
