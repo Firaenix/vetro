@@ -84,6 +84,13 @@ function readTelemetry() {
         try { zones = fs.readdirSync(dir).filter(function (n) { return /^thermal_zone\d+$/.test(n); }).sort(); } catch (e) { zones = []; }
         zones.forEach(function (zone) { if (!temp) temp = tryRead(dir + '/' + zone + '/temp'); });
     });
+    // Samsung's TVs have no Linux thermal zones (nothing under /sys/class/thermal): the SoC driver exposes the
+    // temperature in whole degrees, as <soc>/<name>.thermal/temperature (56 on a Q80A), readable by everyone.
+    if (!temp) {
+        var soc = '/sys/devices/platform/soc', names = [];
+        try { names = fs.readdirSync(soc).filter(function (n) { return /thermal$/.test(n); }).sort(); } catch (e) { names = []; }
+        names.forEach(function (n) { if (!temp) temp = tryRead(soc + '/' + n + '/temperature'); });
+    }
     if (temp) { var t = parseInt(temp, 10); out.soctemp_c = (t > 1000) ? (t / 1000) : t; }
     else out.soctemp_c = null;
 
@@ -107,19 +114,23 @@ function dashboardHtml() { return renderDashboard(); }
 
 var diagnosticPending = null;
 function downloadDiagnostics(res) {
+    // The CPU rate needs a second sample 1.5 s after the first, and the TV runs its commands one after the other:
+    // read together, the sample waited behind the 13 s startup listing and came back without a rate (4 of 7 reports).
+    // The other reads start once the second sample is queued, so it runs right after the first.
+    function later(fn) { return function () { return new Promise(function (r) { setTimeout(r, 1700); }).then(fn); }; }
     if (!diagnosticPending) diagnosticPending = require('./diagnostic-report.js').collect({
         platform: function () { return platform.status(); },
         device: function () { return Object.assign({}, state.settings || {}, {receivedAt: state.receivedAt}); },
-        inventory: function () { return inventory(false); },
-        settings: function () { return tvSettings.read(); },
-        catalog: function () { return menuSettings.load(); },
+        inventory: later(function () { return inventory(false); }),
+        settings: later(function () { return tvSettings.read(); }),
+        catalog: later(function () { return menuSettings.load(); }),
         monitor: function () { return require('./diagnostic-report.js').twoSamples(function (force) { return monitor.snapshot('full', force); }, 1500, 16000).then(function(d){return Object.assign({},d,{telemetry:readTelemetry()});}); },
-        startup: function () { return monitor.startup(); },
-        network: function () { return tvSettings.readNetwork(); },
-        dns: function () { return dnsFilter.status(); },
+        startup: later(function () { return monitor.startup(); }),
+        network: later(function () { return tvSettings.readNetwork(); }),
+        dns: later(function () { return dnsFilter.status(); }),
         mqtt: function () { return bridge.status(); },
-        privacy: function () { return privacy.read(); },
-        hbbtv: function () { return hbbtv.read(); },
+        privacy: later(function () { return privacy.read(); }),
+        hbbtv: later(function () { return hbbtv.read(); }),
         probe: function () { return state; },
         serviceApis: serviceApiProbe
     }).finally(function () { diagnosticPending = null; });
