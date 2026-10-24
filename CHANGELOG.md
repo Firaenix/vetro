@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **Compatibility:** community report from a Samsung Q65S95C (2023, firmware T-PTMCDEUC-0090-2220.4) on Vetro 0.2.3 (issue #13): service running on Node v18.18.2 with an authenticated UID-0 agent, 23 voice-assistant and ACR components disabled from Quick settings, button remaps in use, and 29 of 29 controls confirmed.
 - **Compatibility:** community report from a Samsung QN55S95BAFXZA (2024, Tizen 6.5, firmware T-PTMAKUC-1720.7) on Vetro 0.2.3 (issue #14): root on the first try, the TV rooted itself after the Host PC IP step, and 15 of 17 ad and analytics packages were disabled and verified. Only 267 of its 368 packages are in the Q80A-based catalog.
 - **Installation guide** (issues #11 and #12): a short version at the top (the two packages, what you do and what you do not do), the TV's *Host PC IP → 127.0.0.1* step as its own step 5, and a table for "root agent not connected" that starts from what `/status` shows.
 - **TV page:** opening Vetro now also tries to start the background service (`tizen.application.launch('vetrotvapp.svc')`) and retries the service check for about 12 seconds, because a public-level certificate may not get the on-boot start honored (issue #2). No extra privilege is declared. Tested by a contributor on a Q60A (Tizen 6, personal certificate), where the service started on every launch. On the Q80A the call is accepted, but the system restarts the stopped service by itself within a second, so starting from a stopped service could not be reproduced there. The page also says when the service did not answer.
