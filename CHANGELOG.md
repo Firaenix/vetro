@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **Compatibility:** community report from a Samsung QN55Q65DAGXZS (2024, firmware T-NKLDUABC-0090-2123.9) on Vetro 0.2.3 (issue #10): built unsigned and loaded with apps2samsung, reported working; the export shows an authenticated UID-0 agent, the service running on Node v18.18.2 and 29 confirmed controls. Cold-boot persistence was not reported.
 - **Compatibility:** community report from a Samsung Q65S95C (2023, firmware T-PTMCDEUC-0090-2220.4) on Vetro 0.2.3 (issue #13): service running on Node v18.18.2 with an authenticated UID-0 agent, 23 voice-assistant and ACR components disabled from Quick settings, button remaps in use, and 29 of 29 controls confirmed.
 - **Compatibility:** community report from a Samsung QN55S95BAFXZA (2024, Tizen 6.5, firmware T-PTMAKUC-1720.7) on Vetro 0.2.3 (issue #14): root on the first try, the TV rooted itself after the Host PC IP step, and 15 of 17 ad and analytics packages were disabled and verified. Only 267 of its 368 packages are in the Q80A-based catalog.
 - **Installation guide** (issues #11 and #12): a short version at the top (the two packages, what you do and what you do not do), the TV's *Host PC IP → 127.0.0.1* step as its own step 5, and a table for "root agent not connected" that starts from what `/status` shows.
