@@ -14,12 +14,29 @@ function dockResources() {
     })(root, '');
     return found.map(rel => ({name: 'native/dock/res/' + rel, source: path.join(root, rel)}));
 }
+const DEFAULT_PORT = 8099;
+// Ports the package already uses for other things: the TV's remote WebSocket origins in config.xml.
+const RESERVED_PORTS = [8001, 8002];
+// The widget's access origin and probe page are fixed when the package is built, so the port is chosen here
+// (VETRO_PORT=9000 node build.cjs). The service reads the same value from build-info.js.
+function buildPort() {
+    const raw = process.env.VETRO_PORT;
+    if (raw === undefined || raw === '') return DEFAULT_PORT;
+    const port = Number(raw);
+    if (!/^\d+$/.test(raw) || port < 1024 || port > 65535 || RESERVED_PORTS.includes(port)) {
+        throw new Error('VETRO_PORT must be a whole number from 1024 to 65535, not ' + RESERVED_PORTS.join(' or ') + ': ' + raw);
+    }
+    return port;
+}
+const PORT_FILES = ['config.xml', 'index.html'];
 function collectFiles() {
     const dockFiles = dockResources();
+    const port = buildPort();
     const names = ['config.xml', 'index.html', 'icon.png', 'native/TvState.dll', 'native/TvState.runtimeconfig.json',
         'native/dock/tvlauncher-dotnet.dll', 'native/dock/tvlauncher-dotnet.runtimeconfig.json'].concat(
         fs.readdirSync(path.join(__dirname,'service')).filter(name => name.endsWith('.js')).sort().map(name => 'service/' + name));
     const metadata = Object.assign({}, require('./service/build-info.js'));
+    if (port !== DEFAULT_PORT) metadata.port = port;
     let revision = process.env.VETRO_SOURCE_REVISION;
     if (!revision) {
         try { revision = require('child_process').execFileSync('git', ['rev-parse', 'HEAD'], {cwd: __dirname, stdio: ['ignore','pipe','ignore']}).toString().trim(); } catch (_) {}
@@ -31,6 +48,8 @@ function collectFiles() {
     }
     return names.map(name => ({uri: encodeURIComponent(name), data: name === 'service/build-info.js'
         ? Buffer.from("'use strict';\nmodule.exports = " + JSON.stringify(metadata) + ';\n')
+        : PORT_FILES.includes(name) && port !== DEFAULT_PORT
+        ? Buffer.from(fs.readFileSync(path.join(__dirname,name),'utf8').replace(/\b8099\b/g, String(port)))
         : fs.readFileSync(path.join(__dirname,name))}))
         .concat(dockFiles.map(file => ({uri: encodeURIComponent(file.name), data: fs.readFileSync(file.source)})));
 }

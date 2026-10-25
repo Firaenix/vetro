@@ -34,7 +34,9 @@ var quickSettings = require('./quick-settings.js');
 var leftovers = new (require('./leftovers.js').Leftovers)(agentExecute);
 // Components whose disabled flag Vetro may change: verified ACR set plus Quick Settings groups.
 var TOGGLE_IDS = debloat.VERIFIED_GLOBAL_IDS.concat(quickSettings.ALLOWED_IDS);
-var PORT = Number(process.env.VETRO_PORT) || 8099;
+// The package builder writes a non-default port into build-info.js (VETRO_PORT=... node build.cjs);
+// VETRO_PORT at run time still wins for local runs.
+var PORT = Number(process.env.VETRO_PORT) || buildInfo.port || 8099;
 
 // --- telemetry reader (service side, uid 5001) ---------------------------
 // Reads /proc and /sys directly via fs. No platform command is needed. Every read
