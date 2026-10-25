@@ -15,7 +15,7 @@
 Vetro lets you turn off features you never use, stop unwanted background services and reduce viewing-data collection. Open its dashboard from a computer or phone on your local network, see what each component does, and choose what stays active.
 
 <p align="center">
-  <img src="app/docs/images/quick-settings.jpg" alt="Vetro Quick settings: HbbTV, ACR viewing data, domain blocking and voice assistant switches" width="1000">
+  <img src="app/docs/images/quick-settings.jpg" alt="Vetro Quick settings: HbbTV, advertising and tracking, domain blocking and voice assistant switches" width="1000">
   <br><em>Quick settings on Vetro 0.2.3, connected to the test TV.</em>
 </p>
 
@@ -33,7 +33,7 @@ Disabling unnecessary services can free resources; the result depends on what wa
 A package name alone rarely tells you whether you need it. Vetro adds descriptions, feature areas and roles drawn from the Q80A firmware manifests: **Tracking**, **Not used at home**, **Optional** and **Keep**. Search by name, package or purpose, then expand a group to inspect its components.
 
 <p align="center">
-  <img src="app/docs/images/debloater-current.jpg" alt="Vetro Debloater filtered to Tracking, with component descriptions, app state and startup flags" width="1000">
+  <img src="app/docs/images/task-manager.jpg" alt="Vetro Task manager filtered to Tracking, with component descriptions, app state and startup flags" width="1000">
   <br><em>Find viewing analytics and advertising components without guessing their purpose.</em>
 </p>
 
@@ -45,7 +45,20 @@ Quick settings and Task manager (the former Debloater) share the same inventory:
 
 ## Quick settings: quick wins
 
-Quick settings is the first panel. Each switch is a win, worded as what you get, and *on* means it is applied: **Disable HbbTV** and **Disable MultiScreen autostart** (these two free memory), **Stop Ambient (partial block)** (Samsung's screen service starts it again within seconds, so this only frees memory for a while), **Disable viewing-data tracking** (ACR), **Disable all advertising and tracking**, **Block ad and tracking domains** and **Disable automatic firmware update**, plus the voice assistants, with a **Disable all voice assistants** switch that covers every voice component. A chip says *Done* or *Partly done*, and every win can be switched back. The memory figures come from a process survey of a Q80A; the effect of the new switches on a running TV is still being verified. Launcher (beta) and Remapper (the former Remote panel) sit next to it at the top of the navigation.
+Quick settings is the first panel. Each switch is a win, worded as what you get, and *on* means it is applied: **Disable HbbTV** and **Disable MultiScreen autostart** (these two free memory), **Stop Ambient (partial block)** (Samsung's screen service starts it again within seconds, so this only frees memory for a while), **Disable all advertising and tracking** (which includes the ACR viewing-data services), **Block ad and tracking domains** and **Disable automatic firmware update**, plus the voice assistants, with a **Disable all voice assistants** switch that covers every voice component. A chip says *Done* or *Partly done*, and every win can be switched back. The memory figures come from a process survey of a Q80A; the effect of the new switches on a running TV is still being verified. Launcher (beta) and Remapper (the former Remote panel) sit next to it at the top of the navigation.
+
+## Launcher (beta)
+
+A glass launcher that opens on the Home key with the same apps and icons as Samsung's Home, in the same order, and starts again after a restart or a crash. Samsung's Home stays one press away (the **Samsung Home** button), and nothing is disabled or removed. It is a .NET process run by the TV's own `dotnet` and is tested on one TV (a Q80A), so treat it as experimental elsewhere. Turn it on in the **Launcher** tab, which also previews the bar.
+
+<p align="center">
+  <img src="app/docs/images/launcher-tv.jpg" alt="The Vetro launcher bar at the bottom of the TV screen: the apps from Samsung's Home, a Source hint, and Settings and Samsung Home buttons" width="1000">
+  <br><em>The launcher as the TV draws it (captured from the Q80A, shown here on a plain backdrop instead of the video).</em>
+</p>
+
+<p align="center">
+  <img src="app/docs/images/launcher-tab.jpg" alt="The Launcher tab of the dashboard: a preview of the bar, the launcher switch and the Fix TizenTube switch" width="1000">
+</p>
 
 ## More privacy, fewer voice services
 
@@ -95,6 +108,10 @@ There is no confirmed blanket Tizen version range. Firmware patches, runtime sup
 | TV settings | Adjust supported picture controls and selected advanced settings, with readback and restore handling. |
 | MQTT & Home Assistant | Connect a broker, publish state and discovery, and trigger actions from exact topics. [Setup guide](app/docs/mqtt/README.md). |
 | Diagnostics | Download a redacted compatibility report for review before sharing it in an issue. [Report format](app/docs/DIAGNOSTIC-EXPORT.md). |
+
+<p align="center">
+  <img src="app/docs/images/remapper.jpg" alt="The Remapper tab: listen to a remote key, choose an app and save the shortcut" width="1000">
+</p>
 
 ## Development
 
