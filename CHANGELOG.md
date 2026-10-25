@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.0 — 2026-10-25
 
 - **Port clash** (issue #16): the port is no longer fixed at 8099. `VETRO_PORT=9000 node build.cjs` (in `app/` or `rooting/`) writes the port into the widget's access origin, the probe page and the service, so Vetro can sit beside an app that already uses 8099 (tizen-youtube). The default and the default package are unchanged; a port outside 1024–65535, or 8001/8002 (used by the TV's remote sockets), is refused. It is a build-time choice, not a setting on the TV. Not tried on a TV.
 - **Installation guide** (issues #11 and #12): a short version at the top (the two packages, what you do and what you do not do), the TV's *Host PC IP → 127.0.0.1* step as its own step 5, and a table for "root agent not connected" that starts from what `/status` shows.
@@ -43,7 +43,7 @@
 - Dashboard live sampling starts off. **Start live** samples the TV for 2 minutes and stops by itself; opening a component drawer takes one sample when process data is stale.
 - CPU, network and paging rates restart after a gap of more than 60 seconds instead of reporting an average over the idle period.
 
-## 0.2.3 — unreleased
+## 0.2.3 — never tagged, included in 0.3.0
 
 - English-only service messages: MQTT validation and event log, MQTT rule results, local domain filter errors.
 - Removed an unused MQTT storage publication that telemetry never supplied.
