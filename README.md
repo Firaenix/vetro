@@ -15,7 +15,7 @@
 Vetro runs on your Samsung TV with root access and gives you a dashboard, open from any computer or phone on your network, to manage it. Replace Samsung's Home with a light launcher, switch off what tracks you and wastes memory, and make the remote do what you want.
 
 <p align="center">
-  <img src="app/docs/images/dashboard.jpg" alt="Vetro dashboard, Quick settings: HbbTV, advertising and tracking, domain blocking and voice assistant switches" width="1000">
+  <img src="app/docs/images/dashboard-quick-settings.jpg" alt="Vetro dashboard, Quick settings: HbbTV, advertising and tracking, domain blocking and voice assistant switches" width="1000">
   <br><em>The dashboard on a Samsung Q80A.</em>
 </p>
 
@@ -26,14 +26,14 @@ A fast, glass-style launcher on the Home key. It shows the same apps and icons a
 **It frees memory.** While the launcher is on, Samsung's Home is closed. On the Q80A that is about 150 MB of RAM that the launcher replaces with about 20–30 MB: available RAM went from **533 MB to 662 MB, about 24% more**. Method and numbers in the [performance evidence](app/docs/PERFORMANCE.md).
 
 <p align="center">
-  <img src="app/docs/images/launcher-tv.jpg" alt="The Vetro launcher at the bottom of the TV screen: the apps from Samsung's Home, a Source hint, and Settings and Samsung Home buttons" width="1000">
+  <img src="app/docs/images/launcher-on-tv.jpg" alt="The Vetro launcher at the bottom of the TV screen: the apps from Samsung's Home, a Source hint, and Settings and Samsung Home buttons" width="1000">
   <br><em>The launcher as the TV draws it (captured from the Q80A, over a plain backdrop instead of the video).</em>
 </p>
 
 Turn it on in the **Launcher** tab, which also previews the bar. **Fix TizenTube** gives that tile the YouTube icon and closes Samsung's YouTube before TizenTube starts. The launcher is in beta.
 
 <p align="center">
-  <img src="app/docs/images/launcher-tab.jpg" alt="The Launcher tab of the dashboard: a preview of the bar, the launcher switch and the Fix TizenTube switch" width="1000">
+  <img src="app/docs/images/launcher-dashboard.jpg" alt="The Launcher tab of the dashboard: a preview of the bar, the launcher switch and the Fix TizenTube switch" width="1000">
 </p>
 
 ## Debloater
@@ -64,17 +64,15 @@ Quick settings and Task manager share the same inventory: disable an assistant i
 Do what you want with the remote. Press a button, choose an app, and the button opens it. Shortcuts survive restarts, and a key can also trigger an MQTT message for Home Assistant.
 
 <p align="center">
-  <img src="app/docs/images/remapper.jpg" alt="The Remapper tab: listen to a remote key, choose an app and save the shortcut" width="1000">
+  <img src="app/docs/images/remapper-dashboard.jpg" alt="The Remapper tab: listen to a remote key, choose an app and save the shortcut" width="1000">
 </p>
 
 ## Also included
 
-| | |
-| --- | --- |
-| **TV settings** | Adjust supported picture controls and selected advanced settings, with read-back and restore. |
-| **MQTT and Home Assistant** | Publish the TV's state and discovery and trigger actions from exact topics. [Setup guide](app/docs/mqtt/README.md). |
-| **Dashboard** | CPU, RAM, swap, storage and processes. Live sampling starts when you ask and stops after two minutes. |
-| **Diagnostics** | Download a redacted report to share in an issue. [Report format](app/docs/DIAGNOSTIC-EXPORT.md). |
+- **TV settings:** adjust supported picture controls and selected advanced settings, with read-back and restore.
+- **MQTT and Home Assistant:** publish the TV's state and discovery and trigger actions from exact topics. [Setup guide](app/docs/mqtt/README.md).
+- **Dashboard:** CPU, RAM, swap, storage and processes. Live sampling starts when you ask and stops after two minutes.
+- **Diagnostics:** download a redacted report to share in an issue. [Report format](app/docs/DIAGNOSTIC-EXPORT.md).
 
 ## Install
 
