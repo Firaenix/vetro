@@ -21,12 +21,14 @@ function fixture(options) {
         fs.writeFileSync(path.join(dir, 'tvlauncher-dotnet.dll'), 'x');
         fs.writeFileSync(path.join(dir, 'res', 'glass_tile.png'), 'x');
     }
-    const tv = {running: options.running === true, scripts: [], neverStarts: options.neverStarts === true, csfs: true, clock: 1000000,
+    const tv = {autorun: options.autorun == null ? 1 : options.autorun, running: options.running === true, scripts: [], neverStarts: options.neverStarts === true, csfs: true, clock: 1000000,
         homeData: options.homeData == null ? HOME_DATA : options.homeData, log: options.log || ''};
     const execute = async function (cmd) {
         tv.scripts.push(cmd);
         if (/^app_launcher -k /.test(cmd)) { tv.csfs = false; return {exit_code: 0, stdout: ''}; }
         const script = Buffer.from(cmd.split(' ')[1], 'base64').toString();
+        if (script.includes('vconftool set') && script.includes('auto_start')) { tv.autorun = +/auto_start (\d)/.exec(script)[1]; return {exit_code: 0, stdout: ''}; }
+        if (script.includes('vconftool get') && script.includes('auto_start')) return {exit_code: 0, stdout: 'db/menu/smart_hub/ontvsetting/auto_start, value = ' + tv.autorun + ' (Int32)\n'};
         if (script.includes('.appLayerCache')) return {exit_code: 0, stdout: tv.homeData};
         if (script.includes('setsid nohup')) { tv.started = script; if (!tv.neverStarts) tv.running = true; return {exit_code: 0, stdout: 'started\n'}; }
         if (script.includes('kill -9') && !script.includes('echo "dock=')) { tv.running = false; tv.stopped = (tv.stopped || 0) + 1; return {exit_code: 0, stdout: ''}; }
@@ -61,11 +63,37 @@ function fixture(options) {
     assert.ok(f.tv.started.includes('TVLAUNCHER_DIR=/home/owner') && f.tv.started.includes('WAYLAND_DISPLAY=wayland-0') && f.tv.started.includes('setsid nohup /usr/bin/dotnet'));
     assert.ok(f.tv.started.indexOf('kill -9') < f.tv.started.indexOf('setsid'), 'a previous dock is stopped before the new one starts');
     assert.ok(/tr "\\0" " " < \/proc\/\$p\/cmdline/.test(f.tv.started) && f.tv.started.includes('grep -q tvlauncher-dotnet.dll'), 'only a pid that is our dll is killed');
+    assert.ok(/systemd-run --unit=vetro-dock --collect .*-p KillSignal=SIGKILL .*\/usr\/bin\/env HOME=\/home\/owner .*\/usr\/bin\/dotnet tvlauncher-dotnet\.dll/.test(f.tv.started),
+        'the dock runs as its own systemd unit, outside the root agent\'s cgroup (sdbd stops at standby and kills it): ' + f.tv.started);
+    assert.ok(f.tv.started.indexOf('systemctl stop vetro-dock.service') < f.tv.started.indexOf('systemd-run'), 'a previous unit is stopped first');
+    assert.ok(/systemd-run [^\n]*\|\| [^\n]*setsid nohup \/usr\/bin\/dotnet/.test(f.tv.started), 'the detached start remains as the fallback');
     assert.equal(f.tv.csfs, false, 'Samsung Home closed once the dock is up');
     assert.equal(JSON.parse(fs.readFileSync(path.join(f.tmp, 'state.json'), 'utf8')).enabled, true);
     assert.equal(f.tv.scripts[f.tv.scripts.length - 1].startsWith('echo '), true);
     assert.ok(f.tv.scripts.findIndex(c => /^app_launcher -k com\.samsung\.tv\.csfs$/.test(c)) > f.tv.scripts.findIndex(c => c.startsWith('echo') && Buffer.from(c.split(' ')[1], 'base64').toString().includes('setsid')),
         'Samsung Home is closed after the dock started, never before');
+
+    // Autorun Smart Hub: switched off with the launcher, put back with it, only if the launcher changed it.
+    f = fixture({autorun: 1});
+    s = await f.dock.enable();
+    assert.equal(f.tv.autorun, 0, 'Samsung Home no longer comes up at power-on');
+    assert.equal(s.autorunSwitchedOff, true);
+    await f.dock.enable();
+    assert.equal(f.dock.readState().autorunWas, 1, 'a second enable does not forget the original value');
+    s = await f.dock.disable();
+    assert.equal(f.tv.autorun, 1, 'turned back on with the launcher off');
+    assert.equal(s.autorunSwitchedOff, false);
+    f = fixture({autorun: 0});
+    await f.dock.enable();
+    await f.dock.disable();
+    assert.equal(f.tv.autorun, 0, 'the user had it off already: left off');
+    f = fixture({autorun: 1});
+    await f.dock.enable();
+    f.tv.autorun = 1;   // the user switched it on again in Samsung's menu while the launcher was on
+    f.tv.scripts.length = 0;
+    await f.dock.disable();
+    assert.ok(!f.tv.scripts.some(c => c.startsWith('echo') && Buffer.from(c.split(' ')[1], 'base64').toString().includes('vconftool set')), 'nothing to put back');
+    assert.equal(f.dock.readState().autorunWas, null);
 
     // Switching on fails when the dock never appears: back to how it was, with the reason.
     f = fixture({neverStarts: true, log: 'fatal: no display'});
@@ -113,14 +141,53 @@ function fixture(options) {
     assert.equal(await reborn.dock.supervise(true), 'started');
     assert.equal(reborn.tv.running, true);
 
-    // Failures back off, then give up and switch off so Samsung's Home answers the Home key again.
+    // Failures back off but never switch the setting off: a slow boot must not cost the launcher for good.
     const bad = fixture({neverStarts: true});
     fs.writeFileSync(bad.dock.stateFile, JSON.stringify({enabled: true, since: 5}));
     assert.equal(await bad.dock.supervise(true), 'failed');
     assert.equal(await bad.dock.supervise(true), null, 'backing off: not tried again at once');
-    for (let i = 0; i < 3; i++) { bad.tv.clock += 301000; await bad.dock.supervise(true); }
-    assert.equal(bad.dock.readState().enabled, false, 'given up after repeated failures');
-    assert.match(bad.dock.lastError, /switched off/);
+    for (let i = 0; i < 6; i++) { bad.tv.clock += 301000; await bad.dock.supervise(true); }
+    assert.equal(bad.dock.readState().enabled, true, 'still on after repeated failures');
+    assert.match(bad.dock.lastError, /keeps trying/);
+    assert.ok(bad.dock.nextTry - bad.tv.clock <= 300000, 'the wait between tries is capped at five minutes');
+    bad.tv.neverStarts = false; bad.dock.nextTry = 0;
+    assert.equal(await bad.dock.supervise(true), 'started', 'it starts as soon as the TV lets it');
+    assert.equal(bad.dock.lastError, null);
+
+    // Right after a boot a start gets a long wait; later it does not (and nothing waits when it comes up at once).
+    const slow = fixture({neverStarts: true});
+    slow.dock.uptime = () => 40;
+    const t0 = slow.tv.clock;
+    await assert.rejects(slow.dock.waitRunning(), /did not start/);
+    assert.ok(slow.tv.clock - t0 > 60000, 'boot window: waited ' + (slow.tv.clock - t0) + ' ms');
+    slow.dock.uptime = () => 90000;
+    const t1 = slow.tv.clock;
+    await assert.rejects(slow.dock.waitRunning(), /did not start/);
+    assert.ok(slow.tv.clock - t1 < 20000, 'normal uptime: short wait');
+
+    // A start after a boot uses the list saved by the last start, then refreshes it once the dock is up.
+    const quick = fixture();
+    await quick.dock.enable();
+    quick.tv.running = false;
+    quick.tv.scripts.length = 0;
+    quick.tv.homeData = HOME_DATA.replace(hex('Netflix'), hex('Netflix 4K'));
+    quick.dock.uptime = () => 40;
+    assert.equal(await quick.dock.supervise(true), 'started');
+    const order = quick.tv.scripts.map(c => c.startsWith('echo') ? Buffer.from(c.split(' ')[1], 'base64').toString() : c);
+    const iStart = order.findIndex(c => c.includes('setsid nohup')), iRead = order.findIndex(c => c.includes('.appLayerCache'));
+    assert.ok(iStart >= 0 && iRead === -1, 'the dock is started without reading the Home row first (or at all while booting)');
+    await new Promise(r => setImmediate(r));
+    assert.ok(!fs.readFileSync(path.join(quick.tmp, 'apps.tsv'), 'utf8').includes('Netflix 4K'), 'not rewritten while the TV is still booting');
+    quick.dock.uptime = () => 400;
+    assert.equal(await quick.dock.supervise(true), 'running');
+    await new Promise(r => setImmediate(r));
+    assert.ok(fs.readFileSync(path.join(quick.tmp, 'apps.tsv'), 'utf8').includes('Netflix 4K'), 'the list is refreshed for the next start once the TV settled');
+    // No saved list yet (first run): the list is built first, as in enable().
+    const fresh = fixture();
+    fs.writeFileSync(fresh.dock.stateFile, JSON.stringify({enabled: true, since: 5}));
+    await fresh.dock.supervise(true);
+    const o2 = fresh.tv.scripts.map(c => c.startsWith('echo') ? Buffer.from(c.split(' ')[1], 'base64').toString() : c);
+    assert.ok(o2.findIndex(c => c.includes('.appLayerCache')) < o2.findIndex(c => c.includes('setsid nohup')), 'no saved list: read it first');
 
     // Refresh needs the dock to be on.
     f = fixture();
@@ -145,6 +212,12 @@ function fixture(options) {
     assert.equal(s.fixTizenTube, true, 'saved while the launcher is off');
     assert.equal(s.enabled, false);
     assert.ok(!f.tv.started, 'the launcher is not started by the fix');
+    assert.ok(fs.readFileSync(path.join(f.tmp, 'apps.tsv'), 'utf8').includes('tizentube'), 'off: the list for the page preview follows the choice');
+    // The page preview: with no list yet, the page's status reads it once; the plain status never touches the TV
+    fs.unlinkSync(path.join(f.tmp, 'apps.tsv'));
+    s = await f.dock.status(); assert.deepEqual(s.entries, [], 'plain status: no TV read');
+    s = await f.dock.status({preview: true}); assert.ok(s.entries.length > 0, 'preview status reads the list before the launcher was ever on');
+    assert.equal(s.enabled, false); assert.ok(!f.tv.started, 'and starts nothing');
     s = await f.dock.enable();
     assert.equal(s.fixTizenTube, true, 'turning the launcher on keeps the choice');
     let tsv = fs.readFileSync(path.join(f.tmp, 'apps.tsv'), 'utf8');
@@ -175,5 +248,5 @@ function fixture(options) {
     assert.equal(f.dock.iconFile('evil'), null, 'a path outside the icon places is never read');
     assert.equal(f.dock.iconFile('net'), null, 'nor one with parent directories');
 
-    console.log('PASS dock service: on, off, boot start, crash restart, back-off and give-up');
+    console.log('PASS dock service: on, off, boot start, crash restart, back-off that never switches it off');
 })().catch(e => { console.error(e); process.exitCode = 1; });

@@ -58,8 +58,15 @@ namespace Launcher
         private static int _homeCode = -1;
         private static bool _learn;
         private static double _lastHome = -100;
-        private static int[] _inputFds = new int[0];
-        private static EvdevReader[] _inputReaders = new EvdevReader[0];
+        // One entry per watched evdev node, in the order they were opened: ecore hands the index back to OnInput.
+        private static readonly List<int> _inputFds = new List<int>();
+        private static readonly List<EvdevReader> _inputReaders = new List<EvdevReader>();
+        private static readonly List<string> _inputPaths = new List<string>();
+        private static readonly List<IntPtr> _inputHandlers = new List<IntPtr>();
+        private static IntPtr _rescanTimer;
+        private static readonly Efl.TaskCb RescanCb = OnRescan;
+        private const double RescanSeconds = 3.0;
+        private const int EAgain = 11;
         private static readonly byte[] InputBuf = new byte[16 * 32];
         private static readonly List<int> InputPresses = new List<int>();
 
@@ -199,7 +206,7 @@ namespace Launcher
 
         /// <summary>
         /// Opens the remote's evdev nodes read-only and watches them through ecore fd handlers
-        /// (no polling). Reading does not consume the key: the system still sees it, so the
+        /// (no polling of the keys; only the list of nodes is looked at again every few seconds). Reading does not consume the key: the system still sees it, so the
         /// Samsung Home only stays out of the way while it is not running.
         /// </summary>
         private static void SetupInput(string[] args)
@@ -210,24 +217,54 @@ namespace Launcher
             _learn = Flag(args, "--learn");
             if (_homeCode < 0 && !_learn) return;
 
+            WatchNewNodes();
+            Log("home key code " + (_homeCode < 0 ? "not set" : _homeCode.ToString()) + (_learn ? ", learn mode (every key press is logged)" : ""));
+            // The remote's nodes come and go: it reconnects after standby, and Vetro creates its forwarded-remote
+            // node some time after this process started. A node that appears later is picked up here.
+            _rescanTimer = Efl.ecore_timer_add(RescanSeconds, RescanCb, IntPtr.Zero);
+        }
+
+        /// <summary>Opens every remote node that is not being watched yet. Returns how many were added.</summary>
+        private static int WatchNewNodes()
+        {
             List<string> nodes;
             try { nodes = InputDevices.RemoteNodes(File.ReadAllText("/proc/bus/input/devices")); }
-            catch (Exception ex) { Log("input: cannot list devices: " + ex.Message); return; }
-
-            var fds = new List<int>();
-            var readers = new List<EvdevReader>();
+            catch (Exception ex) { Log("input: cannot list devices: " + ex.Message); return 0; }
+            int added = 0;
             foreach (string node in nodes)
             {
+                if (_inputPaths.Contains(node)) continue;
                 int fd = Libc.open(node, Libc.O_RDONLY | Libc.O_NONBLOCK);
                 if (fd < 0) { Log("input: cannot open " + node + " errno=" + Marshal.GetLastWin32Error()); continue; }
-                Efl.ecore_main_fd_handler_add(fd, Efl.EcoreFdRead, InputCb, (IntPtr)fds.Count, IntPtr.Zero, IntPtr.Zero);
-                fds.Add(fd);
-                readers.Add(new EvdevReader());
+                int index = _inputFds.Count;
+                IntPtr handler = Efl.ecore_main_fd_handler_add(fd, Efl.EcoreFdRead, InputCb, (IntPtr)index, IntPtr.Zero, IntPtr.Zero);
+                _inputFds.Add(fd);
+                _inputReaders.Add(new EvdevReader());
+                _inputPaths.Add(node);
+                _inputHandlers.Add(handler);
+                added++;
                 Log("input: watching " + node);
             }
-            _inputFds = fds.ToArray();
-            _inputReaders = readers.ToArray();
-            Log("home key code " + (_homeCode < 0 ? "not set" : _homeCode.ToString()) + (_learn ? ", learn mode (every key press is logged)" : ""));
+            return added;
+        }
+
+        private static byte OnRescan(IntPtr data)
+        {
+            try { WatchNewNodes(); }
+            catch (Exception ex) { Log("input: rescan: " + ex.Message); }
+            return 1;
+        }
+
+        /// <summary>A node that was unplugged (the remote went to sleep) stops being watched; it is opened again when it returns.</summary>
+        private static void DropNode(int index)
+        {
+            if (_inputFds[index] < 0) return;
+            Log("input: lost " + _inputPaths[index]);
+            if (_inputHandlers[index] != IntPtr.Zero) Efl.ecore_main_fd_handler_del(_inputHandlers[index]);
+            Libc.close(_inputFds[index]);
+            _inputFds[index] = -1;
+            _inputHandlers[index] = IntPtr.Zero;
+            _inputPaths[index] = null;
         }
 
         private static AppEntry[] LoadApps(string path) { return LoadList(path, Catalog.BuiltIn); }
@@ -528,10 +565,11 @@ namespace Launcher
             try
             {
                 int index = (int)data;
-                if (index < 0 || index >= _inputFds.Length) return 1;
+                if (index < 0 || index >= _inputFds.Count || _inputFds[index] < 0) return 1;
                 for (int round = 0; round < 8; round++)
                 {
                     long n = (long)Libc.read(_inputFds[index], InputBuf, (UIntPtr)InputBuf.Length);
+                    if (n < 0 && Marshal.GetLastWin32Error() != EAgain) { DropNode(index); break; }
                     if (n <= 0) break;
                     InputPresses.Clear();
                     _inputReaders[index].Feed(InputBuf, (int)n, InputPresses);

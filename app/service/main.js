@@ -135,6 +135,9 @@ function downloadDiagnostics(res) {
         mqtt: function () { return bridge.status(); },
         privacy: later(function () { return privacy.read(); }),
         hbbtv: later(function () { return hbbtv.read(); }),
+        // The collector treats a truthy "error" as an unreadable section; the launcher keeps its last error there.
+        launcher: later(function () { return dock.status().then(function (d) { return Object.assign({}, d, {error: null, hasError: !!d.error}); }); }),
+        quickWins: later(function () { return wins.read(); }),
         probe: function () { return state; },
         serviceApis: serviceApiProbe
     }).finally(function () { diagnosticPending = null; });
@@ -603,7 +606,7 @@ http.createServer(function (req, res) {
     }
     if (url === '/dns') return dnsFilter.status().then(function(d){serveJson(res,d)}).catch(function(e){serveJson(res,{error:e.message},503)});
     if (url === '/dock/icon') {var slug=require('url').parse(req.url,true).query.slug,png=dock.iconFile(slug);if(!png)return serveJson(res,{error:'icon unavailable'},404);res.writeHead(200,{'content-type':'image/png','cache-control':'private, max-age=60','X-Content-Type-Options':'nosniff'});return res.end(png);}
-    if (url === '/dock') return dock.status().then(function(d){serveJson(res,d)}).catch(function(e){serveJson(res,{error:e.message},503)});
+    if (url === '/dock') return dock.status({preview: true}).then(function(d){serveJson(res,d)}).catch(function(e){serveJson(res,{error:e.message},503)});
     if (url === '/home-order') return homeOrder.read().then(function(d){serveJson(res,d)}).catch(function(e){serveJson(res,{error:e.message},503)});
     if (url === '/wins') return wins.read().then(function(d){serveJson(res,d)}).catch(function(e){serveJson(res,{error:e.message},503)});
     if (url === '/icon.png') return serveIcon(res);
@@ -635,7 +638,10 @@ http.createServer(function (req, res) {
 
 platform.start();
 // The dock is started again after a boot or a crash while its switch is on.
-var dockTimer=setInterval(function(){dock.supervise(platform.status().agent.connected).catch(function(){});},10000);if(dockTimer.unref)dockTimer.unref();
+// A short tick notices the moment the root agent connects, so after a boot the dock starts at once
+// instead of waiting for the next 10 s round.
+var dockAgentWas=false,dockTicks=0;
+var dockTimer=setInterval(function(){var up=!!platform.status().agent.connected,edge=up&&!dockAgentWas;dockAgentWas=up;if(edge||++dockTicks>=5){dockTicks=0;dock.supervise(up).catch(function(){});}},2000);if(dockTimer.unref)dockTimer.unref();
 // Retry after boot and helper disconnects, including late adapter availability.
 var inputRestoreTimer=setInterval(restoreInput,5000);if(inputRestoreTimer.unref)inputRestoreTimer.unref();
 

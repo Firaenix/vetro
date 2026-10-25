@@ -39,7 +39,11 @@ const tick = () => new Promise(r => setImmediate(r));
     assert.match(page, /data-dock-switch[^>]*aria-label="Vetro launcher"/);
     assert.doesNotMatch(page, /data-dock-switch[^>]* checked/);
     assert.doesNotMatch(page, /Rebuild app list/, 'nothing to rebuild while off');
-    assert.doesNotMatch(page, /lp-pill/, 'no preview while the launcher is off');
+    assert.match(page, /dock-layout[\s\S]*dock-left[\s\S]*lp-pill[\s\S]*quick-group/, 'two columns: the preview on the left, the switches on the right, already while the launcher is off');
+    assert.match(page, /How the launcher will look with this TV’s apps/);assert.match(page, /lp-scene/, 'a still TV picture behind the launcher');
+    sandbox.dockData = Object.assign({}, dock, {entries: []}); sandbox.renderDock();
+    assert.match(el('dockBody').innerHTML, /An example row/, 'no list read yet: an example row, never an empty box');
+    sandbox.dockData = dock; sandbox.renderDock();
     assert.match(page, /<h3>Fix TizenTube<\/h3>/);
     assert.match(page, /com\.samsung\.tv\.cobalt-yt/, 'says which process it closes');
     assert.match(page, /data-dock-fix[^>]*aria-label="Fix TizenTube"/);
@@ -105,6 +109,17 @@ const tick = () => new Promise(r => setImmediate(r));
     dock = Object.assign({}, dock, {enabled: true, running: true, entries: [{slug: 'netflix', label: 'Netflix', appId: 'org.tizen.netflix-app', system: false}]});
     await el('dock').onclick({target: {closest: () => ({dataset: {dockReload: ''}})}}); await tick(); await tick();
     assert.match(el('dockBody').innerHTML, /TizenTube is not in Samsung’s Home row/, 'tells when there is no TizenTube tile to fix');
+    // Registry read and no TizenTube anywhere: the switch is greyed out (unless it is already on, so it can be turned off)
+    sandbox.inventory = [{appId: 'org.tizen.netflix-app'}];
+    sandbox.dockData = dock; sandbox.renderDock();
+    page = el('dockBody').innerHTML;
+    assert.match(page, /TizenTube is not installed on this TV/);
+    assert.match(page, /data-dock-fix[^>]* disabled/, 'nothing to fix: the switch is greyed out');
+    sandbox.inventory = [{appId: 'xvvl3S1TT1.TizenTubeStandalone'}];
+    sandbox.dockData = dock; sandbox.renderDock();
+    page = el('dockBody').innerHTML;
+    assert.doesNotMatch(page, /TizenTube is not installed/); assert.match(page, /TizenTube is not in Samsung’s Home row/, 'installed but without a tile: the other chip'); assert.doesNotMatch(page, /data-dock-fix[^>]* disabled/);
+    sandbox.inventory = [];
 
     // A package without the dock cannot be switched on.
     dock = Object.assign({}, dock, {installed: false});
