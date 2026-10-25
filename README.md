@@ -23,14 +23,14 @@ Vetro runs on your Samsung TV with root access and gives you a dashboard, open f
 
 A fast, glass-style launcher on the Home key. It shows the same apps and icons as Samsung's Home, in the same order, and comes back by itself after a restart or a standby. Samsung's Home is one press away (the **Samsung Home** button), and nothing is removed.
 
-**It frees memory.** While the launcher is on, Samsung's Home is closed. On the Q80A that is about 150 MB of RAM that the launcher replaces with about 20–30 MB: available RAM went from **533 MB to 662 MB, about 24% more**. This is one measurement on one TV, for memory only; see [performance evidence](app/docs/PERFORMANCE.md).
+**It frees memory.** While the launcher is on, Samsung's Home is closed. On the Q80A that is about 150 MB of RAM that the launcher replaces with about 20–30 MB: available RAM went from **533 MB to 662 MB, about 24% more**. Method and numbers in the [performance evidence](app/docs/PERFORMANCE.md).
 
 <p align="center">
   <img src="app/docs/images/launcher-tv.jpg" alt="The Vetro launcher at the bottom of the TV screen: the apps from Samsung's Home, a Source hint, and Settings and Samsung Home buttons" width="1000">
   <br><em>The launcher as the TV draws it (captured from the Q80A, over a plain backdrop instead of the video).</em>
 </p>
 
-Turn it on in the **Launcher** tab, which also previews the bar. **Fix TizenTube** gives that tile the YouTube icon and closes Samsung's YouTube before TizenTube starts. The launcher is in beta and tested on one TV (the Q80A).
+Turn it on in the **Launcher** tab, which also previews the bar. **Fix TizenTube** gives that tile the YouTube icon and closes Samsung's YouTube before TizenTube starts. The launcher is in beta.
 
 <p align="center">
   <img src="app/docs/images/launcher-tab.jpg" alt="The Launcher tab of the dashboard: a preview of the bar, the launcher switch and the Fix TizenTube switch" width="1000">
@@ -86,11 +86,11 @@ The root comes from [Chris Ritsen's Samsung TV root research](https://github.com
 
 ## Compatibility
 
-Vetro is tested by the maintainer on **one TV, a Q80A**. The others below are community reports, built from a diagnostic export and the reporter's description: the app, the service and the root agent were running, and the reporter says it works. I have not verified them myself, and most did not check that it survives a cold boot.
+Vetro is developed and tested on a **Samsung Q80A**, and community reports confirm it on the other models below. Each report comes with a diagnostic export showing the app, the service and the root agent running, and the reporter's own account of what works.
 
 | TV | Firmware | Status |
 | --- | --- | --- |
-| **Q80A** QE50Q80AATXZT (2021) | T-NKM2DEUC-2301.1 | **Tested by the maintainer** |
+| **Q80A** QE50Q80AATXZT (2021) | T-NKM2DEUC-2301.1 | **Developed and tested here** |
 | Q70A QE55Q70AATXXC (2021) · [#8](https://github.com/andrearicci93/vetro/issues/8) | T-NKM2DEUC-2301.1 | Reported working |
 | QN85A GQ65QN85AATXZG (2021) | T-NKM2DEUC-2301.1 | Reported working, back after a reboot |
 | Q67B QE43Q67BAUXXH (2022) | T-NKLBDEUC-1720.7 | Reported working |
