@@ -46,6 +46,11 @@ namespace Launcher
 
         // Remote-control input (read-only evdev, never grabbed): the Home key toggles the dock.
         private const double HomeDebounceSeconds = 0.35;
+        // The raw press (evdev) opens the dock at once. The system holds Home to tell a short press from a long one
+        // and only then delivers XF86Home to the focused window, which is now the dock: on 2025 firmware that echo
+        // comes about 0.6 s later, well past the debounce. An XF86Home this soon after the raw press is the same
+        // press, not a request to close.
+        private const double HomeEchoSeconds = 1.5;
 
         // --kill-on-home APPID[,APPID...]: the system sends Home to Samsung's own home app as well (it is relaunched
         // by the key), so after each Home press the app is closed again, a few times because its start is slow.
@@ -58,6 +63,32 @@ namespace Launcher
         private const double GuardFirst = 0.15;
         private static readonly double[] GuardGaps = { 0.3, 0.45, 0.7, 1.2 };   // sleeps between the five kills
         private static int _homeCode = -1;
+
+        // While the dock is up, the navigation keys are taken from the input device as well, like Home: the same
+        // press reaches us through the compositor only 140 ms or more later (measured on 2025 firmware), and that
+        // delay is what makes moving along the bar feel slow. Each raw press leaves one expected echo per key;
+        // the compositor's copy that arrives within EchoSeconds is dropped, a later one is a new press.
+        // Linux input codes; Samsung's remote reports the standard ones for these (Home is the odd one, 63).
+        private static readonly int[] NavCodes = { 105, 106, 103, 108, 28, 1 };
+        private static readonly string[] NavKeys = { "Left", "Right", "Up", "Down", "Return", "XF86Back" };
+        private static readonly int[] EchoPending = new int[6];
+        private static readonly double[] EchoAt = new double[6];
+        private const double EchoSeconds = 1.0;
+
+        /// <summary>Which raw key an evas key name stands for; the compositor has several names for OK and Back.</summary>
+        private static int NavBucket(string key)
+        {
+            switch (key)
+            {
+                case "Left": return 0;
+                case "Right": return 1;
+                case "Up": return 2;
+                case "Down": return 3;
+                case "Return": case "KP_Enter": case "Select": return 4;
+                case "XF86Back": case "Escape": return 5;
+                default: return -1;
+            }
+        }
         private static bool _learn;
         private static double _lastHome = -100;
         // One entry per watched evdev node, in the order they were opened: ecore hands the index back to OnInput.
@@ -512,6 +543,31 @@ namespace Launcher
             {
                 // Evas_Event_Key_Down starts with `const char *keyname`.
                 string key = Marshal.PtrToStringAnsi(Marshal.ReadIntPtr(eventInfo));
+                int bucket = NavBucket(key);
+                if (bucket >= 0 && EchoPending[bucket] > 0)
+                {
+                    if (Efl.ecore_time_get() - EchoAt[bucket] < EchoSeconds) { EchoPending[bucket]--; return; }
+                    EchoPending[bucket] = 0;   // stale: the echo never came, this is a new press
+                }
+                HandleKey(key);
+            }
+            catch (Exception ex) { Log("key: " + ex); }
+        }
+
+        /// <summary>A navigation key read straight from the input device, acted on only while the dock is up.</summary>
+        private static void NavFromInput(int code)
+        {
+            int i = Array.IndexOf(NavCodes, code);
+            if (i < 0 || !_ctl.IsActive) return;
+            EchoPending[i]++;
+            EchoAt[i] = Efl.ecore_time_get();
+            HandleKey(NavKeys[i]);
+        }
+
+        private static void HandleKey(string key)
+        {
+            try
+            {
                 int index;
                 switch (_ctl.Key(key, out index))
                 {
@@ -530,7 +586,12 @@ namespace Launcher
                         SelectPage(_appsCtl, _appsDock);
                         break;
                     case KeyAction.Hide:
-                        if (key == "XF86Home") _lastHome = Efl.ecore_time_get();
+                        if (key == "XF86Home")
+                        {
+                            double now = Efl.ecore_time_get();
+                            if (now - _lastHome < HomeEchoSeconds) { Log("home echo ignored " + ((now - _lastHome) * 1000).ToString("0") + " ms after the press"); break; }
+                            _lastHome = now;
+                        }
                         HideDock();
                         break;
                 }
@@ -579,7 +640,7 @@ namespace Launcher
                     {
                         int code = InputPresses[k];
                         if (_learn) Log("key code " + code);
-                        if (code != _homeCode) continue;
+                        if (code != _homeCode) { NavFromInput(code); continue; }
                         double now = Efl.ecore_time_get();
                         // The focused dock also gets XF86Home through evas and hides itself: count it once.
                         if (now - _lastHome < HomeDebounceSeconds) continue;
@@ -632,8 +693,10 @@ namespace Launcher
                 if (e.Panel == "inputs") OpenInputs(); else Log("unknown panel " + e.Panel);
                 return;
             }
-            if (e.SourceType >= 0) SwitchSource(e); else Launch(e);
+            // The dock starts leaving before the request goes out: the launch call blocks the loop for a moment on a
+            // busy TV, and the press should be answered on the next frame, not after it.
             HideDock();
+            if (e.SourceType >= 0) SwitchSource(e); else Launch(e);
         }
 
         private const string SourceIconDir = "/usr/apps/com.samsung.tv.theme-resource/shared/res/org.tizen.menu/Settings_Popup/device_icon/";
@@ -716,7 +779,10 @@ namespace Launcher
                     Log("launch " + e.AppId + " rc=" + Libc.system("/usr/bin/app_launcher -s " + e.AppId + " >/dev/null 2>&1 &"));
                     return;
                 }
-                if (SendLaunch(e.AppId)) { Log("launch " + e.AppId); return; }
+                long t0 = Stopwatch.GetTimestamp();
+                bool sent = SendLaunch(e.AppId);
+                long ms = (Stopwatch.GetTimestamp() - t0) * 1000 / Stopwatch.Frequency;
+                if (sent) { Log("launch " + e.AppId + " request " + ms + " ms"); return; }
                 Log("launch failed: " + e.AppId);
                 if (e.FallbackAppId != null && SendLaunch(e.FallbackAppId)) { Log("launch " + e.FallbackAppId + " (fallback)"); return; }
                 // Last resort: the platform's command line launcher.
@@ -783,6 +849,8 @@ namespace Launcher
         {
             if (Flag(args, "--get-home")) return GetHome();
             _perf = Flag(args, "--perf");
+            // --no-motion: the selection jumps and the icons keep their size; the bar still fades in and out.
+            if (Flag(args, "--no-motion")) { Controller.Instant = true; DockLayout.Grow = false; DockLayout.GlowFromIcon = false; }
             _dir = ResolveDir(args);
             _logPath = Path.Combine(_dir, "tvlauncher.log");
             _pidPath = Path.Combine(_dir, "tvlauncher.pid");
