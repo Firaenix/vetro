@@ -53,5 +53,16 @@ function harness(opts){
   const r=await quick.apply('tracking-all',true,deps);
   assert.deepEqual(r.changed,['t.one']);assert.deepEqual(r.stopped,['t.one'],'only running members of the group are stopped, not other apps');assert.equal(r.state.status,'off');
  }
+ {
+  // The separate ACR switch was removed because the all-in switch covers its components: pin that down, with the
+  // package id of the firmware (com.samsung.tv.acr-service-app) and with the app id used as package id.
+  const catalog=require('../service/app-catalog.js'),ids=require('../service/debloat.js').VERIFIED_GLOBAL_IDS;
+  [id=>id==='com.samsung.tv.acr'?'com.samsung.tv.acr-service-app':id,id=>id].forEach(pkgOf=>{
+   const rows=ids.map(id=>{const c=catalog.describe({appId:id,packageId:pkgOf(id)});return {appId:id,packageId:pkgOf(id),disabled:false,area:c.area,role:c.role};});
+   const s=quick.state(quick.find('tracking-all'),rows);
+   assert.deepEqual(s.installed.sort(),ids.slice().sort(),'every verified ACR/analytics component is a member of the all-in tracking switch');
+  });
+  assert.equal(quick.find('acr'),null,'no second ACR switch');
+ }
  console.log('PASS quick settings: group state, one-script apply, verified readback, rollback, stop of running members, exclusions');
 })().catch(e=>{console.error(e);process.exitCode=1});

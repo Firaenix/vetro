@@ -3,7 +3,6 @@
 // disabled flag on every installed member, as the Debloater does for a single
 // component. Disabling also stops members that are still running, so the
 // change takes effect now. Members come from the Q80A package manifests.
-var debloat = require('./debloat.js');
 
 // A group with "area" has no fixed list: its members are every component the Task manager files under that area,
 // except the ones that role "keep" or the protection rules cover (Smart Hub's ad agent, Vetro itself).
@@ -11,9 +10,6 @@ var GROUPS = [
     {id: 'tracking-all', label: 'All advertising and tracking', section: 'tracking', area: 'tracking',
         description: 'Every component the Task manager lists under Advertising and tracking: viewing data, ad players, analytics, personalised content and the privacy screens. Smart Hub’s ad agent stays on because Home loads part of it.',
         ids: []},
-    {id: 'acr', label: 'ACR viewing data', section: 'privacy',
-        description: 'Automatic content recognition and viewing analytics services.',
-        ids: debloat.VERIFIED_GLOBAL_IDS},
     {id: 'voice-all', label: 'All voice assistants', section: 'voice', area: 'voice', microphone: true, everything: true,
         description: 'Every component the Task manager lists under Voice assistants: Alexa, Bixby, Google Assistant, the assistant hub, always-on voice, speech and text-to-speech, voice actions and search suggestions.',
         ids: []},
